@@ -500,6 +500,8 @@ init_thread (struct thread *t, const char *name, int priority)
     t->magic = THREAD_MAGIC;
     t->waiting_lock=NULL;
     t->original_priority=priority;
+    t->nice=0;
+    t->recent_cpu=(int)0<<14;
     list_init(&t->holding_locks);
 
     old_level = intr_disable ();
