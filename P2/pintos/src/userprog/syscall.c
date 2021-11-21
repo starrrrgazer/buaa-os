@@ -92,7 +92,7 @@ void wait(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
 void create(struct intr_frame* f){
     uint32_t *user_ptr = f->esp;
     *user_ptr++;
-    f->eax
+    
 }
 void remove(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
 
