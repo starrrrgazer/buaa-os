@@ -27,19 +27,27 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t
 process_execute (const char *file_name) 
+//!线程创建函数 file_name包含了我们要执行的函数和后面的参数
+//!修改大概就是将文件名和参数分开取出文件名传递给thread_create
 {
-  char *fn_copy;
+  char *fn_copy;//!函数strtok_R会改变原符号串，所以要一份复制的
   tid_t tid;
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
-  fn_copy = palloc_get_page (0);
-  if (fn_copy == NULL)
+  fn_copy= palloc_get_page (0);//!palloc_get_page(0)动态分配了一个内存页
+  if (fn_copy== NULL)
     return TID_ERROR;
+  
+  //!
   strlcpy (fn_copy, file_name, PGSIZE);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  //!
+  char *save_ptr;
+  char *rname = strtok_r(fn_copy, " ", &save_ptr);
+  tid = thread_create (rname, PRI_DEFAULT, start_process, fn_copy);
+  //!thread_create()函数创建一个内核线程用来执行这个线程
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -49,22 +57,65 @@ process_execute (const char *file_name)
    running. */
 static void
 start_process (void *file_name_)
+//!压栈
 {
   char *file_name = file_name_;
-  struct intr_frame if_;
+  struct intr_frame if_;//!栈
   bool success;
+
+//!
+//!分割文件名
+  char *save_ptr;
+  char *rname;
+  rname=strtok_r(file_name," ",&save_ptr);
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+  //!
+  //!加载成功successs为ture，且load初始化esp
+  success = load (rname, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
-  palloc_free_page (file_name);
-  if (!success) 
+ 
+  if (!success){
+    palloc_free_page (file_name);
     thread_exit ();
+  }
+  //!
+  else{
+    char *esp=if_.esp;
+    char *argv[300];
+    int i,espmove,argc=0;
+    char *name;
+    name=rname;
+    for(;name!=NULL;name=strtok_r(NULL," ",&save_ptr)){
+      espmove=strlen(name)+1;
+      esp-=espmove;
+      memcpy (esp, name, strlen(name)+1);
+      argv[argc]=esp;
+      argc++;
+    }
+    while((int)esp%4){
+      esp--;
+    }
+
+    int *p=esp-4;
+    *p--=0;
+    for(i=argc-1;i>=0;i--){
+      *p--=(int *)argv[i];
+    }
+    *p--=p+1;
+    *p--=argc;
+    *p--=0;
+    esp=esp+4;
+    if_.esp=esp;
+
+
+    palloc_free_page (file_name);
+  }
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -110,6 +161,10 @@ process_exit (void)
          directory before destroying the process's page
          directory, or our active page directory will be one
          that's been freed (and cleared). */
+     //!
+     //!添加输出 thread_name()：传递给process_execute() 的全名
+      printf("%s: exit(%d) \n",thread_name(),cur->vreturn);
+      
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
@@ -437,7 +492,7 @@ setup_stack (void **esp)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE;
+        *esp = PHYS_BASE-12;//!人为给系统调用参数留下空间，防止访问越界
       else
         palloc_free_page (kpage);
     }

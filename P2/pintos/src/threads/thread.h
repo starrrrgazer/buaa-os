@@ -7,18 +7,18 @@
 
 /* States in a thread's life cycle. */
 enum thread_status
-{
+  {
     THREAD_RUNNING,     /* Running thread. */
     THREAD_READY,       /* Not running but ready to run. */
     THREAD_BLOCKED,     /* Waiting for an event to trigger. */
     THREAD_DYING        /* About to be destroyed. */
-};
+  };
 
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
 typedef int tid_t;
 #define TID_ERROR ((tid_t) -1)          /* Error value for tid_t. */
-typedef int fixed_point; //ubdate here
+
 /* Thread priorities. */
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
@@ -81,7 +81,7 @@ typedef int fixed_point; //ubdate here
    ready state is on the run queue, whereas only a thread in the
    blocked state is on a semaphore wait list. */
 struct thread
-{
+  {
     /* Owned by thread.c. */
     tid_t tid;                          /* Thread identifier. */
     enum thread_status status;          /* Thread state. */
@@ -89,7 +89,7 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
-
+    int vreturn;
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
@@ -100,13 +100,7 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
-    int64_t ticks;
-    int original_priority;
-    struct list holding_locks;
-    struct lock *waiting_lock;
-    int nice;  //updated here
-    fixed_point recent_cpu;
-};
+  };
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -143,14 +137,5 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
-void blocked_check (struct thread *t, void *aux UNUSED);
-bool cmp_priority(struct list_elem *list_elem1,struct list_elem *list_elem2, void *aux UNUSED);
-bool lock_cmp(struct list_elem *list_elem1,struct list_elem *list_elem2, void *aux UNUSED);
-void lock_isready(struct thread *t);
-bool cond_cmp(struct list_elem *list_elem1,struct list_elem *list_elem2, void *aux UNUSED);
-void compute_load_avg();//update here
-void compute_recent_cpu(struct thread *t, void * aux UNUSED);//update here
-void update_recent_cpu();// update here
-void mlfqs_set_priority();// update here
-void thread_recompute_priority(struct thread *t, void * aux UNUSED);//update here
+
 #endif /* threads/thread.h */
