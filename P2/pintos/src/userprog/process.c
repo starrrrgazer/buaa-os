@@ -45,7 +45,7 @@ process_execute (const char *file_name)
   /* Create a new thread to execute FILE_NAME. */
   //!
   char *save_ptr;
-  char *rname = strtok_r(fn_copy, " ", &save_ptr);
+  char *rname = strtok_r(file_name, " ", &save_ptr);
   tid = thread_create (rname, PRI_DEFAULT, start_process, fn_copy);
   //!thread_create()函数创建一个内核线程用来执行这个线程
   if (tid == TID_ERROR)
@@ -59,15 +59,13 @@ static void
 start_process (void *file_name_)
 //!压栈
 {
+  
   char *file_name = file_name_;
   struct intr_frame if_;//!栈
   bool success;
+char *fn_copy=malloc(strlen(file_name)+1);
+  strlcpy(fn_copy,file_name,strlen(file_name)+1);
 
-//!
-//!分割文件名
-  char *save_ptr;
-  char *rname;
-  rname=strtok_r(file_name," ",&save_ptr);
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -75,47 +73,77 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   //!
+//!分割文件名
+  char *save_ptr;
+  char *rname;
+  rname=strtok_r(file_name," ",&save_ptr);
+  //printf("(arg0)%s\n",*file_name);
+  //!
   //!加载成功successs为ture，且load初始化esp
   success = load (rname, &if_.eip, &if_.esp);
-
   /* If load failed, quit. */
  
   if (!success){
-    palloc_free_page (file_name);
+   // palloc_free_page (file_name);
+   thread_current()->vreturn=-1;
     thread_exit ();
   }
   //!
-  else{
-    char *esp=if_.esp;
-    char *argv[300];
-    int i,espmove,argc=0;
-    char *name;
-    name=rname;
-    for(;name!=NULL;name=strtok_r(NULL," ",&save_ptr)){
-      espmove=strlen(name)+1;
-      esp-=espmove;
-      memcpy (esp, name, strlen(name)+1);
+    char *save_ptr2;
+    char* esp=if_.esp;
+    char* argv[300];
+    char* argv1[300];
+    int i,j,espmove,argc=0;
+    char* name;
+    ;
+    for(name=strtok_r(fn_copy," ",&save_ptr2);name!=NULL;name=strtok_r(NULL," ",&save_ptr2)){
+      //espmove=strlen(name)+1;
+      //esp-=espmove;
+      //memcpy (esp, name, strlen(name)+1);
+      argv1[argc]=name;
+      //printf("(arg00)%s\n",argv1[argc]);
       argv[argc]=esp;
+      //printf("(arg1)%s %#X\n",name,(int *)argv[argc]);
       argc++;
     }
-    while((int)esp%4){
+    i=argc-1;
+    for(i=argc-1;i>=0;i--){
+      espmove=strlen(argv1[i])+1;
+      esp-=espmove;
+      memcpy (esp, argv1[i], strlen(argv1[i])+1);
+      printf("(arg1)%s %#X\n",esp,esp);
+      argv[i]=esp;
+     //printf("(arg00)%#X\n",(int *)argv[i]);
+    }
+    while((int)esp%4!=0){
       esp--;
     }
-
-    int *p=esp-4;
-    *p--=0;
+    esp = esp -4;
+  (*(int*)esp)  = 0;
+    printf("(arg2)%d %#X\n",*(int*)esp,esp);
+    int *p=esp;
+    p--;
     for(i=argc-1;i>=0;i--){
-      *p--=(int *)argv[i];
+      *p=(int *)argv[i];
+      printf("(arg3)%#X %#X\n",*p,(int *)p);
+      p--;
     }
-    *p--=p+1;
-    *p--=argc;
-    *p--=0;
+    *p=p+1;
+    printf("(arg4)%#X %#X\n",*p,(int *)p);
+    p--;
+    *p=argc;
+    printf("(arg5)%d %#X\n",*p,(int *)p);
+    p--;
+    *p=0;
+    printf("(arg6)%d %#X\n",*p,(int *)p);
+    p--;
     esp=esp+4;
+    
     if_.esp=esp;
 
 
     palloc_free_page (file_name);
-  }
+  
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -126,6 +154,7 @@ start_process (void *file_name_)
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
 }
+
 
 /* Waits for thread TID to die and returns its exit status.  If
    it was terminated by the kernel (i.e. killed due to an
@@ -139,6 +168,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  timer_msleep (1);
   return -1;
 }
 
@@ -164,7 +194,6 @@ process_exit (void)
      //!
      //!添加输出 thread_name()：传递给process_execute() 的全名
       printf("%s: exit(%d) \n",thread_name(),cur->vreturn);
-      
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
@@ -492,7 +521,7 @@ setup_stack (void **esp)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE-12;//!人为给系统调用参数留下空间，防止访问越界
+        *esp = PHYS_BASE;//!人为给系统调用参数留下空间，防止访问越界
       else
         palloc_free_page (kpage);
     }
