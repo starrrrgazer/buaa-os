@@ -576,7 +576,7 @@ setup_stack (void **esp)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE;//!人为给系统调用参数留下空间，防止访问越界
+        *esp = PHYS_BASE-12;//!人为给系统调用参数留下空间，防止访问越界
       else
         palloc_free_page (kpage);
     }
