@@ -233,6 +233,8 @@ strstr (const char *haystack, const char *needle)
 */
 char *
 strtok_r (char *s, const char *delimiters, char **save_ptr) 
+//!s:分割字符串，delimiters:分隔符,save_ptr：剩下未分割的
+//!返回值：排在前面的被分割出的字符串或null
 {
   char *token;
   
@@ -246,7 +248,8 @@ strtok_r (char *s, const char *delimiters, char **save_ptr)
   ASSERT (s != NULL);
 
   /* Skip any DELIMITERS at our current position. */
-  while (strchr (delimiters, *s) != NULL) 
+  while (strchr (delimiters, *s) != NULL)
+  //!strchr()  delimiters所指向的字符串中搜索第一次出现字符*s的位置。
     {
       /* strchr() will always return nonnull if we're searching
          for a null byte, because every string contains a null
