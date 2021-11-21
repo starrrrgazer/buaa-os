@@ -84,17 +84,36 @@ void exec(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
 
 /*
  * wll update wait,create,remove
+ * uint32_t *user_ptr = f->esp; -----esp此时指向word-align
+ * user_ptr++;--------指针指向argv[0][...]即第一个参数，再加一就是第二个参数
+ * 是否还需要判断指针的合法性？
  * */
-void wait(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
 /*
- * 在P2/pintos/src/filesys/filesys.c 里面有个filesys_create函数,因为不推荐修改
+* 需要调用P2\pintos\src\userprog\process.c的process_wait (tid_t child_tid UNUSED) 
+* */
+void wait(struct intr_frame* f){
+  uint32_t *user_ptr = f->esp;
+  user_ptr ++;
+  f->eax = process_wait(*user_ptr);
+}
+/*
+ * 在P2/pintos/src/filesys/filesys.c 里面有个
+ * filesys_create (const char *name, off_t initial_size)函数，直接调用
  * */
 void create(struct intr_frame* f){
-    uint32_t *user_ptr = f->esp;
-    *user_ptr++;
-    
+    uint32_t *user_ptr = f->esp; 
+    user_ptr++;
+    f->eax = filesys_create((const char*)*user_ptr,*(user_ptr+1));
 }
-void remove(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
+/*
+ * 在P2/pintos/src/filesys/filesys.c 里面有个
+ * filesys_remove (const char *name) 函数，直接调用
+ * */
+void remove(struct intr_frame* f){
+  uint32_t *user_ptr = f->esp;
+  user_ptr++;
+  f->eax = filesys_remove((const char*)*user_ptr);
+  }
 
 void open(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
 
