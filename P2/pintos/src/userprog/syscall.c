@@ -82,10 +82,22 @@ void halt(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
 void exit(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
 void exec(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
 
-void create(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
-void remove(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
-void open(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
+/*
+ * wll update wait,create,remove
+ * */
 void wait(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
+/*
+ * 在P2/pintos/src/filesys/filesys.c 里面有个filesys_create函数,因为不推荐修改
+ * */
+void create(struct intr_frame* f){
+    uint32_t *user_ptr = f->esp;
+    *user_ptr++;
+    f->eax
+}
+void remove(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
+
+void open(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
+
 void filesize(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
 void read(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
 void seek(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
