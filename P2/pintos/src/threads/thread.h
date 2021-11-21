@@ -84,6 +84,8 @@ struct thread
 {
     /* Owned by thread.c. */
     tid_t tid;                          /* Thread identifier. */
+    int FileNum;                        /* Opened thread number. */
+    int maxFd;                          /* Max fd. */
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
@@ -92,6 +94,10 @@ struct thread
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+
+    struct list file_list;              /* List for opened file list. */
+
+  
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -144,6 +150,14 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 void blocked_check (struct thread *t, void *aux UNUSED);
+
+struct file_node 
+{ 
+  int fd; 
+  struct list_elem elem; 
+  struct file *f; 
+};
+
 bool cmp_priority(struct list_elem *list_elem1,struct list_elem *list_elem2, void *aux UNUSED);
 bool lock_cmp(struct list_elem *list_elem1,struct list_elem *list_elem2, void *aux UNUSED);
 void lock_isready(struct thread *t);
