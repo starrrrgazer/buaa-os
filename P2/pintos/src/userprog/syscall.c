@@ -79,7 +79,8 @@ write (struct intr_frame* f)
   
 }
 void halt(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
-void exit(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
+/*wll update.这里需要记录进程退出的状态。*/
+void exit(struct intr_frame* f){uint32_t *user_ptr = f->esp;uint32_t *user_ptr2 = f->esp;user_ptr2++;thread_current()->exitStatus = *user_ptr2;}
 void exec(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
 
 /*

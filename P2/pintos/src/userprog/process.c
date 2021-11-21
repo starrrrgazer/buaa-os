@@ -50,6 +50,10 @@ process_execute (const char *file_name)
   //!thread_create()函数创建一个内核线程用来执行这个线程
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+
+  /* wll update .信号量修改和子进程运行的判断*/
+  sema_down(&thread_current()->sema);//降低父进程的信号量，等待子进程结束
+  if (!thread_current()->childSuccess) return TID_ERROR;//子进程加载可执行文件失败报错 
   return tid;
 }
 
@@ -82,10 +86,14 @@ char *fn_copy=malloc(strlen(file_name)+1);
   //!加载成功successs为ture，且load初始化esp
   success = load (rname, &if_.eip, &if_.esp);
   /* If load failed, quit. */
- 
+  /* wll update.
+  * 这里要额外进行load失败和成果后的操作，对父进程的影响；
+  */
   if (!success){
    // palloc_free_page (file_name);
    thread_current()->vreturn=-1;
+   thread_current()->parent->childSuccess = false; //! 父进程记录子进程的失败
+   sema_up(&thread_current()->parent->sema); //!增加父进程的信号量，通知父进程
     thread_exit ();
   }
   //!
@@ -141,7 +149,8 @@ char *fn_copy=malloc(strlen(file_name)+1);
     
     if_.esp=esp;
 
-
+    thread_current ()->parent->childSuccess = true;//! 父进程记录子进程的成功
+    sema_up (&thread_current ()->parent->sema);//! 增加父进程的信号量，通知父进程
     palloc_free_page (file_name);
   
 
@@ -176,11 +185,46 @@ char *fn_copy=malloc(strlen(file_name)+1);
 *
 * 这里我们要保证子进程一定成功创建，就需要实现一个同步锁，来保证子进程load成功才接着执行父进程，子进程一旦创建失败，说明该该调用失败了。
 *	而对于wait操作，很明显也需要一个锁，保证父进程在子进程执行期间无法进行任何操作，等待子进程退出后，父进程获取子进程退出码，并回收资源。这里的锁的设计非常精妙，要保证父进程wait时，无法执行任何操作，子进程退出时，需要立刻通知父进程，但不能直接销毁，而要等待父进程来回收资源获取返回码等，然后才可以正常销毁。
+* 
+* 1.process_execute 是线程创建函数，里面调用了thread_create
+* 为了判断进程id到底是不是子进程，需要一个记住子进程的队列，这一部分要在thread_create里面初始化
+* 2.为了判断子进程是否成功创建和运行，thread需要一个success变量来记录 
+* 3.为了实现“父等子，子通知父”，可以使用信号量，当父进程创建了子进程后，就调用sema_down减少父进程信号量，让父进程等待子进程结束，再增加父进程的信号量
+* 所以要在process_execute 降低父进程信号量 ， 在子进程的start_process增加父进程的信号量
+* 4.为了实现进程最多等待任何给定的子进程一次，一次wait完成后就将该子进程从子进程队列中删去
 */
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  
+  struct list *l = &thread_current()->childs;//当前进程的子进程们
+  struct list_elem *temp;
+  temp = list_begin (l);
+  struct child *temp2 = NULL;
+  /*这个循环一直执行直到找到子进程中父进程正在等待的那个（child_tid）*/
+  while (temp != list_end (l))
+  {
+    temp2 = list_entry (temp, struct child, child_elem);
+    if (temp2->tid == child_tid)
+    {//找到了正在等待的子进程
+      if (!temp2->success)
+      {
+        temp2->success = true;
+        sema_down (&temp2->sema);//等待子进程运行结束
+        break;//如果正在等待的那个子进程没有在运行了，则减少它的信号量（为了唤醒父进程）
+      } 
+      else 
+      {
+        return -1;//子进程还在运行，没有退出，则返回-1
+      }
+    }
+    temp = list_next (temp);
+  }
+  if (temp == list_end (l)) {
+    return -1;//没有找到对应子进程，返回-1
+  }
+  //执行到这里说明子进程正常退出
+  list_remove (temp);//从子进程列表中删除该子进程，因为它已经没有在运行了，也就是说父进程重新抢占回了资源
+  return temp2->exitStatus;//store_exit是结构体child里定义的子进程的返回状态
 }
 
 /* Free the current process's resources. */

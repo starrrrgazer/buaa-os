@@ -183,6 +183,30 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
+  /*wll update.只要是对父子进程相关的变量进行一个初始化*/
+  /*记录进程的父进程*/
+  if(t == initial_thread) {
+    t->parent = NULL;
+  }
+  else{
+    t->parent = thread_current();
+  }
+  list_init(&t->childs);
+  sema_init(&t->sema,0);
+  t->childSuccess = true;
+  t->exitStatus = UINT32_MAX;
+  /*初始化子进程*/
+  t->childThread = malloc(sizeof(struct child));
+  t->childThread->tid = tid;
+  sema_init(&t->childThread->sema,0);
+
+  list_push_back(&thread_current()->childs,&t->childThread->child_elem);
+  t->childThread->exitStatus = UINT32_MAX;
+  t->childThread->success = false;
+
+
+
+
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
   kf->eip = NULL;
@@ -290,6 +314,12 @@ thread_exit (void)
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
   intr_disable ();
+
+/*wll update.在进程退出时，需要结束自己的全部子进程*/
+  thread_current()->childThread->exitStatus = thread_current()->exitStatus;
+  sema_up(&thread_current()->childThread->sema);
+
+  
   list_remove (&thread_current()->allelem);
   thread_current ()->status = THREAD_DYING;
   schedule ();
@@ -464,7 +494,6 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->vreturn=0;
   t->magic = THREAD_MAGIC;
-
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
