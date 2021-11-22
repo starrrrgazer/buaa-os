@@ -85,8 +85,8 @@ void exec(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
 
 /*
  * wll update wait,create,remove
- * uint32_t *user_ptr = f->esp; -----esp此时指向word-align
- * user_ptr++;--------指针指向argv[0][...]即第一个参数，再加一就是第二个参数
+ * uint32_t *user_ptr = f->esp; -----esp此时指向栈顶
+ * user_ptr++;--------指针指向第一个参数，再加一就是第二个参数
  * 是否还需要判断指针的合法性？
  * */
 /*

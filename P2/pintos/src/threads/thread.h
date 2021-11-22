@@ -90,7 +90,7 @@ struct child
    tid_t tid;  //进程号
    struct list_elem child_elem;
    struct semaphore sema;
-   bool success; //进程是否运行成功
+   bool waited; //进程是否被等待过
    int exitStatus;//进程退出时的状态
 };
 

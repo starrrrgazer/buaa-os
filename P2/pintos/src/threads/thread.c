@@ -202,7 +202,7 @@ thread_create (const char *name, int priority,
 
   list_push_back(&thread_current()->childs,&t->childThread->child_elem);
   t->childThread->exitStatus = UINT32_MAX;
-  t->childThread->success = false;
+  t->childThread->waited = false;
 
 
 
