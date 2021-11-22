@@ -12,7 +12,7 @@
 #include "threads/synch.h"
 static void syscall_handler (struct intr_frame *);
 typedef void (*CALL_PROC)(struct intr_frame*);
-static struct lock filelock = ;
+static struct lock filelock ;
 CALL_PROC syscalls[21];
 void write(struct intr_frame* f); /* syscall write */
 void halt(struct intr_frame* f); /* syscall halt. */
@@ -173,6 +173,7 @@ void create(struct intr_frame* f){
 void remove(struct intr_frame* f){
   uint32_t *user_ptr = f->esp;
   checkPtr(user_ptr + 1);
+  checkPtr(*(user_ptr + 1));
   user_ptr++;
   lock_acquire(&filelock);
   f->eax = filesys_remove((const char*)*user_ptr);
