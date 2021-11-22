@@ -133,10 +133,27 @@ write (struct intr_frame* f)
   }
   
 }
-void halt(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
+void halt(struct intr_frame* f){
+    shutdown_power_off();
+}
 /*wll update.这里需要记录进程退出的状态。*/
-void exit(struct intr_frame* f){uint32_t *user_ptr = f->esp;uint32_t *user_ptr2 = f->esp;user_ptr2++;thread_current()->exitStatus = *user_ptr2;}
-void exec(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
+void exit(struct intr_frame* f){
+    uint32_t *user_ptr = f->esp;
+    check_ptr2 (user_ptr + 1);
+    *user_ptr++;
+    thread_current()->exitStatus = *user_ptr;
+    thread_exit ();
+}
+pid_t exec(const char * file){
+    if(!file)
+    {
+        return -1;
+    }
+    lock_acquire(&filelock);
+    pid_t tid = process_execute(file);
+    lock_release(&filelock);
+    return tid;
+}
 
 /*
  * wll update wait,create,remove
