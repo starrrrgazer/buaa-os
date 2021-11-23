@@ -173,7 +173,7 @@ pid_t exec(struct intr_frame* f){
     check_ptr2 (*(user_ptr + 1));
     *user_ptr++;
     lock_acquire(&filelock);
-    pid_t tid = process_execute((char*)* user_ptr);
+    pid_t tid = process_execute((const char*)* user_ptr);
     lock_release(&filelock);
     return tid;
 }
