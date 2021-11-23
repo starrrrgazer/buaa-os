@@ -10,6 +10,11 @@
 #include "devices/shutdown.h"
 #include "process.h"
 #include "threads/synch.h"
+#include "pagedir.h"
+#include <threads/vaddr.h>
+#include <devices/input.h>
+#include <threads/malloc.h>
+#include <threads/palloc.h>
 static void syscall_handler (struct intr_frame *);
 typedef void (*CALL_PROC)(struct intr_frame*);
 static struct lock filelock ;
