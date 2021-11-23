@@ -115,7 +115,7 @@ void * checkPtr(const void *user_ptr){
    UADDR 必须低于 PHYS_BASE。
    如果成功则返回字节值，如果出现段错误则返回 -1
    发生了。*/
-static int
+ int
 get_user (const uint8_t *uaddr)
 {
   int result;
@@ -126,7 +126,7 @@ get_user (const uint8_t *uaddr)
 /* 将 BYTE 写入用户地址 UDST。
    UDST 必须低于 PHYS_BASE。
    如果成功则返回真，如果发生段错误则返回假。*/
-static bool
+ bool
 put_user (uint8_t *udst, uint8_t byte)
 {
   int error_code;
@@ -173,22 +173,21 @@ void halt(struct intr_frame* f){
 /*wll update.这里需要记录进程退出的状态。*/
 void exit(struct intr_frame* f){
     uint32_t *user_ptr = f->esp;
-    check_ptr2 (user_ptr + 1);
+    checkPtr (user_ptr + 1);
     *user_ptr++;
     thread_current()->exitStatus = *user_ptr;
     thread_exit ();
 }
-
 void exec(struct intr_frame* f){
     uint32_t *user_ptr = f->esp;
-    check_ptr2 (user_ptr + 1);
-    check_ptr2 (*(user_ptr + 1));
+    checkPtr (user_ptr + 1);
+    checkPtr (*(user_ptr + 1));
     *user_ptr++;
     lock_acquire(&filelock);
     f->eax = process_execute((const char*)* user_ptr);
     lock_release(&filelock);
-    
 }
+
 
 /*
  * wll update wait,create,remove
@@ -236,8 +235,8 @@ void
 open (struct intr_frame* f)
 {
   uint32_t *user_ptr = f->esp;
-  check_ptr (user_ptr + 1);
-  check_ptr (*(user_ptr + 1));
+  checkPtr (user_ptr + 1);
+  checkPtr (*(user_ptr + 1));
   *user_ptr++;
   lock_acquire(&filelock);
   struct file * file_opened = filesys_open((const char *)*user_ptr);
@@ -282,7 +281,8 @@ read(struct intr_frame *f)
   uint8_t * buffer = (uint8_t*)*(user_ptr+1);
   off_t size = *(user_ptr+2);
   if (!is_valid_pointer (buffer, 1) || !is_valid_pointer (buffer + size,1)){
-    exit_special ();
+    thread_current()->exitStatus = -1;
+      thread_exit();
   }
   /* get the files buffer */
   if (fd == 0) //stdin
@@ -316,7 +316,7 @@ filesize(struct intr_frame *f)
 {  
 
   uint32_t *user_ptr = f->esp;
-  check_ptr (user_ptr + 1);
+  checkPtr (user_ptr + 1);
   *user_ptr++;//fd
   struct threadfile *temp =fileid (*user_ptr);
   if (temp)
