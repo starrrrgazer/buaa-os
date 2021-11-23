@@ -30,12 +30,31 @@ void seek(struct intr_frame* f); /* syscall seek */
 void tell(struct intr_frame* f); /* syscall tell */
 void close(struct intr_frame* f); /* syscall close */
 
+
+struct thread_file * find_file_id(int id)   //依据文件句柄从进程打开文件表中找到文件指针
+{ 
+  struct list_elem *e; 
+  struct threadfile * temp=NULL;
+  struct list *files=&thread_current()->files;
+  
+  for(e=list_begin(files);e!=list_end(files);e=list_next(e)) 
+  { 
+    temp= list_entry (e, struct threadfile, file_elem); 
+    if(id==temp->fd) return temp; 
+
+  } 
+  return NULL; 
+
+}
+
+
 void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
- syscalls[SYS_WRITE] = &write; 
- syscalls[SYS_EXEC] = &exec;
+ 
+  syscalls[SYS_WRITE] = &write; 
+  syscalls[SYS_EXEC] = &exec;
   syscalls[SYS_HALT] = &halt;
   syscalls[SYS_EXIT] = &exit;
  
@@ -49,6 +68,7 @@ syscall_init (void)
   syscalls[SYS_CLOSE] =&close;
   syscalls[SYS_READ] = &read;
   syscalls[SYS_FILESIZE] = &filesize;
+
 }
 
 static void
@@ -64,7 +84,9 @@ syscall_handler (struct intr_frame *f UNUSED)
     thread_exit ();
   }
   syscalls[type](f);
+
 }
+
 
 /* wll update.
 * 判断指针指向的地址是否合法.用法就是在取参数前，把指向参数的指针传进来检查这个是不是合法
@@ -144,6 +166,7 @@ void exit(struct intr_frame* f){
     thread_current()->exitStatus = *user_ptr;
     thread_exit ();
 }
+
 pid_t exec(const char * file){
     if(!file)
     {
@@ -197,10 +220,108 @@ void remove(struct intr_frame* f){
   lock_release(&filelock);
   }
 
-void open(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
+void 
+open (struct intr_frame* f)
+{
+  uint32_t *user_ptr = f->esp;
+  check_ptr (user_ptr + 1);
+  check_ptr (*(user_ptr + 1));
+  *user_ptr++;
+  lock_acquire(&filelock);
+  struct file * file_opened = filesys_open((const char *)*user_ptr);
+  lock_release(&filelock);
+  struct thread *cur=thread_current(); 
+  if (file_opened)
+  {
+    struct threadfile *temp = malloc(sizeof(struct thread_file));
+    temp->fd = cur->max_file_fd++;
+    temp->file = file_opened;
+    list_push_back (&cur->files, &temp->file_elem);//维护files列表
+    f->eax = temp->fd;
+  } 
+  else// the file could not be opened
+  {
+    f->eax = -1;
+  }
 
-void filesize(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
-void read(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
+}
+
+bool 
+is_valid_pointer (void* esp,uint8_t argc){
+  for (uint8_t i = 0; i < argc; ++i)
+  {
+    if((!is_user_vaddr (esp)) || 
+      (pagedir_get_page (thread_current()->pagedir, esp)==NULL)){
+      return false;
+    }
+  }
+  return true;
+}
+
+void 
+read(struct intr_frame *f) 
+{ 
+
+  uint32_t *user_ptr = f->esp;
+  /* PASS the test bad read */
+  *user_ptr++;
+  /* We don't konw how to fix the bug, just check the pointer */
+  int fd = *user_ptr;
+  uint8_t * buffer = (uint8_t*)*(user_ptr+1);
+  off_t size = *(user_ptr+2);
+  if (!is_valid_pointer (buffer, 1) || !is_valid_pointer (buffer + size,1)){
+    exit_special ();
+  }
+  /* get the files buffer */
+  if (fd == 0) //stdin
+  {
+    for (int i = 0; i < size; i++)
+      buffer[i] = input_getc();
+    f->eax = size;
+  }
+  else
+  {
+    struct threadfile * temp = find_file_id (*user_ptr);
+    if (temp)
+    {
+      lock_acquire(&filelock);
+      f->eax = file_read (temp->file, buffer, size);
+      lock_release(&filelock);
+    } 
+    else//can't read
+    {
+      f->eax = -1;
+    }
+  }
+
+} 
+
+
+
+
+void 
+filesize(struct intr_frame *f) 
+{  
+
+  uint32_t *user_ptr = f->esp;
+  check_ptr (user_ptr + 1);
+  *user_ptr++;//fd
+  struct threadfile *temp = find_file_id (*user_ptr);
+  if (temp)
+  {
+    lock_acquire(&filelock);
+    f->eax = file_length (temp->file);//return the size in bytes
+    lock_release(&filelock);
+  } 
+  else
+  {
+    f->eax = -1;
+  }
+
+}
+
+
 void seek(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
 void tell(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
 void close(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
+
