@@ -99,8 +99,7 @@ struct thread
   {
     /* Owned by thread.c. */
     tid_t tid;                          /* Thread identifier. */
-    int FileNum;                        /* Opened thread number. */
-    int maxFd;                          /* Max fd. */
+    int maxfd;                          /* Max fd. */
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
@@ -110,7 +109,7 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
-    struct list file_list;              /* List for opened file list. */
+    struct list files;              /* List for opened file list. */
 
   
 
@@ -170,14 +169,13 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
-<<<<<<< HEAD
 void blocked_check (struct thread *t, void *aux UNUSED);
 
-struct file_node 
+struct threadfile
 { 
   int fd; 
-  struct list_elem elem; 
-  struct file *f; 
+  struct list_elem fileelem; 
+  struct file *file; 
 };
 
 bool cmp_priority(struct list_elem *list_elem1,struct list_elem *list_elem2, void *aux UNUSED);
@@ -189,7 +187,6 @@ void compute_recent_cpu(struct thread *t, void * aux UNUSED);//update here
 void update_recent_cpu();// update here
 void mlfqs_set_priority();// update here
 void thread_recompute_priority(struct thread *t, void * aux UNUSED);//update here
-=======
 
->>>>>>> master
+
 #endif /* threads/thread.h */
