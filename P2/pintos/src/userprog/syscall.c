@@ -167,13 +167,13 @@ void exit(struct intr_frame* f){
     thread_exit ();
 }
 
-pid_t exec(const char * file){
-    if(!file)
-    {
-        return -1;
-    }
+pid_t exec(struct intr_frame* f){
+    uint32_t *user_ptr = f->esp;
+    check_ptr2 (user_ptr + 1);
+    check_ptr2 (*(user_ptr + 1));
+    *user_ptr++;
     lock_acquire(&filelock);
-    pid_t tid = process_execute(file);
+    pid_t tid = process_execute((char*)* user_ptr);
     lock_release(&filelock);
     return tid;
 }
