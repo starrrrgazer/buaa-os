@@ -80,6 +80,21 @@ typedef int tid_t;
    only because they are mutually exclusive: only a thread in the
    ready state is on the run queue, whereas only a thread in the
    blocked state is on a semaphore wait list. */
+/*
+* wll update.
+* 需要一个子线程的结构体，并在thread里加入子线程的列表
+*/
+struct child
+{
+   /* data */
+   tid_t tid;  //进程号
+   struct list_elem child_elem;
+   struct semaphore sema;
+   bool waited; //进程是否被等待过
+   int exitStatus;//进程退出时的状态
+};
+
+
 struct thread
   {
     /* Owned by thread.c. */
@@ -106,12 +121,24 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+
+    /*wll update*/
+    struct semaphore sema;
+    struct list childs; //! 或许不需要
+    struct child* childThread;   //作为子进程该有的属性
+    struct thread* parent;
+    bool childSuccess;  //判断子进程是否成功运行
+    int exitStatus;  //退出状态
+
   };
+
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
+
+
 
 void thread_init (void);
 void thread_start (void);

@@ -87,14 +87,11 @@ wait (pid_t pid)
   return syscall1 (SYS_WAIT, pid);
 }
 
-/*
-wll update
-在P2/pintos/src/filesys/filesys.c 里面有个filesys_create函数
 
-*/
 bool
 create (const char *file, unsigned initial_size)
 {
+
   return syscall2 (SYS_CREATE, file, initial_size);
 }
 

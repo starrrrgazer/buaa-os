@@ -50,6 +50,10 @@ process_execute (const char *file_name)
   //!thread_create()函数创建一个内核线程用来执行这个线程
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+
+  /* wll update .信号量修改和子进程运行的判断*/
+  sema_down(&thread_current()->sema);//降低父进程的信号量，等待子进程创建结束
+  if (!thread_current()->childSuccess) return TID_ERROR;//子进程加载可执行文件失败报错 
   return tid;
 }
 
@@ -82,10 +86,14 @@ char *fn_copy=malloc(strlen(file_name)+1);
   //!加载成功successs为ture，且load初始化esp
   success = load (rname, &if_.eip, &if_.esp);
   /* If load failed, quit. */
- 
+  /* wll update.
+  * 这里要额外进行load失败和成果后的操作，对父进程的影响；
+  */
   if (!success){
    // palloc_free_page (file_name);
    thread_current()->vreturn=-1;
+   thread_current()->parent->childSuccess = false; //! 父进程记录子进程的失败
+   sema_up(&thread_current()->parent->sema); //!增加父进程的信号量，通知父进程
     thread_exit ();
   }
   //!
@@ -141,7 +149,8 @@ char *fn_copy=malloc(strlen(file_name)+1);
     
     if_.esp=esp;
 
-
+    thread_current ()->parent->childSuccess = true;//! 父进程记录子进程的成功
+    sema_up (&thread_current ()->parent->sema);//! 增加父进程的信号量，通知父进程
     palloc_free_page (file_name);
   
 
@@ -165,11 +174,59 @@ char *fn_copy=malloc(strlen(file_name)+1);
 
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
+/*
+* wll update.
+* 如果pid仍然存在，则等待它终止。然后，返回pid传递给的状态exit。如果pid没有调用exit()，而是被内核终止（例如，由于异常而终止），则wait(pid)必须返回 -1。
+* wait 如果以下任何条件为真，则必须失败并立即返回 -1：
+* 1.pid 不引用调用进程的直接子进程。 pid 是调用进程的直接子进程，当且仅当调用进程收到 pid 作为成功调用 exec 的返回值。
+请注意，子进程不会被继承：如果 A 产生子进程 B 并且 B 产生子进程 C，那么 A 不能等待 C，即使 B 已经死了。 进程 A 对 wait(C) 的调用必须失败。 类似地，如果孤立进程的父进程在它们退出之前退出，则不会将孤立进程分配给新的父进程。
+翻译一下：就是子进程的不是当前进程的子进程,返回-1
+* 2.调用wait的进程已经调用了wait on pid。 也就是说，一个进程最多可以等待任何给定的孩子一次。
+* 3.被内核终止。在exception.c kill()中可以发现当出现意外结束时，存在判断，调用了thread exit
+* 4.否则返回线程退出的状态
+* 这里我们要保证子进程一定成功创建，就需要实现一个同步锁，来保证子进程load成功才接着执行父进程，子进程一旦创建失败，说明该该调用失败了。
+*	而对于wait操作，很明显也需要一个锁，保证父进程在子进程执行期间无法进行任何操作，等待子进程退出后，父进程获取子进程退出码，并回收资源。这里的锁的设计非常精妙，要保证父进程wait时，无法执行任何操作，子进程退出时，需要立刻通知父进程，但不能直接销毁，而要等待父进程来回收资源获取返回码等，然后才可以正常销毁。
+* 
+* 1.process_execute 是线程创建函数，里面调用了thread_create
+* 为了判断进程id到底是不是子进程，需要一个记住子进程的队列，这一部分要在thread_create里面初始化
+* 2.为了实现“子进程一定成功创建”，在子进程创建时调用的start pocess里对load的结果success额外做了补充。首先是父进程在process execute里降低信号量，等待子进程创建成功的消息，然后子进程在创建时调用的start process用sema up父进程信号量来实现同步锁
+* 3.为了实现“父等子，子通知父”，当父进程调用wait等待子进程时，需要sema down子进程的信号量，然后在子进程exit时再sema up 子进程的信号量，这样就实现了通知父进程
+* 所以要在process_execute 降低父进程信号量 ， 在子进程的start_process增加父进程的信号量
+* 4.为了实现进程最多等待任何给定的子进程一次，多加了一个waited变量来判断这个进程是否已被wait过
+* 5.为了实现内核终止返回-1，这里需要检查指针，如果是中断的话，就将返回状态改为-1
+*/
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  timer_msleep (1);
-  return -1;
+  struct list *childs = &thread_current()->childs;//当前进程的子进程们
+  struct list_elem *childElem;
+  childElem = list_begin (childs);
+  struct child *childPtr = NULL;
+  /*这个循环一直执行直到找到子进程中父进程正在等待的那个（child_tid）*/
+  while (childElem != list_end (childs))
+  {
+    childPtr = list_entry (childElem, struct child, child_elem);
+    if (childPtr->tid == child_tid)
+    {//找到了正在等待的子进程
+      if (!childPtr->waited)//这个子进程是否被等待过
+      {
+        childPtr->waited = true;
+        sema_down (&childPtr->sema);//等待子进程运行结束
+        break;//如果正在等待的那个子进程没有在运行了，则减少它的信号量（为了唤醒父进程）
+      } 
+      else //子进程被等待过了，返回-1
+      {
+        return -1;
+      }
+    }
+    childElem = list_next (childElem);
+  }
+  if (childElem == list_end (childs)) {
+    return -1;//没有找到对应子进程，返回-1
+  }
+  //执行到这里说明子进程正常退出
+  list_remove (childElem);//从子进程列表中删除该子进程，因为它已经没有在运行了，也就是说父进程重新抢占回了资源
+  return childPtr->exitStatus;//返回子进程的退出状态
 }
 
 /* Free the current process's resources. */
