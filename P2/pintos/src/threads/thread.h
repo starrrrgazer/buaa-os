@@ -93,7 +93,11 @@ struct child
    bool waited; //进程是否被等待过
    int exitStatus;//进程退出时的状态
 };
-
+struct threadfile{
+   int fd;
+   struct file* file;
+   struct list_elem fileelem;
+};
 
 struct thread
   {
@@ -105,6 +109,8 @@ struct thread
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
     int vreturn;
+    struct list files; 
+    int maxfd;
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
