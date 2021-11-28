@@ -93,6 +93,7 @@ struct child
    bool waited; //进程是否被等待过
    int exitStatus;//进程退出时的状态
 };
+//!
 struct threadfile{
    int fd;
    struct file* file;
@@ -108,9 +109,10 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
-    int vreturn;
+    //!
     struct list files; 
-    int maxfd;
+    int nfd;
+    struct file * nowfile;
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 

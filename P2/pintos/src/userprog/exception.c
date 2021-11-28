@@ -153,10 +153,12 @@ page_fault (struct intr_frame *f)
 * 如果是write是true说明是读写造成的错误，要在这个条件下修改
 * //! 可能有问题
 */
-   if(write){
+//!!!!!!!
+   if (!user)
+   {
       f->eip = f->eax;
       f->eax = -1;
-      //! 这里可能需要return;
+      return;
    }
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to

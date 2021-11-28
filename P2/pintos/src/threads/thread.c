@@ -4,15 +4,17 @@
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
+#include <filesys/file.h>
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
 #include "threads/palloc.h"
+#include "threads/malloc.h"
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "userprog/syscall.h"
 #ifdef USERPROG
-#include "userprog/process.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -71,6 +73,17 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
+void 
+acquire_lock ()
+{
+  lock_acquire(&filelock);
+}
+
+void 
+release_lock ()
+{
+  lock_release(&filelock);
+}
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -90,6 +103,7 @@ thread_init (void)
   ASSERT (intr_get_level () == INTR_OFF);
 
   lock_init (&tid_lock);
+  lock_init(&filelock);
   list_init (&ready_list);
   list_init (&all_list);
 
@@ -185,12 +199,13 @@ thread_create (const char *name, int priority,
 
   /*wll update.只要是对父子进程相关的变量进行一个初始化*/
   /*记录进程的父进程*/
-  if(t == initial_thread) {
-    t->parent = NULL;
-  }
-  else{
-    t->parent = thread_current();
-  }
+  //!
+  // if(t == initial_thread) {
+  //   t->parent = NULL;
+  // }
+  // else{
+  //   t->parent = thread_current();
+  // }
   list_init(&t->childs);
   sema_init(&t->sema,0);
   t->childSuccess = true;
@@ -318,7 +333,24 @@ thread_exit (void)
 /*wll update.在进程退出时，需要结束自己的全部子进程*/
   thread_current()->childThread->exitStatus = thread_current()->exitStatus;
   sema_up(&thread_current()->childThread->sema);
+//!
+  file_close (thread_current ()->nowfile);
 
+  //!
+  struct list_elem *e;
+  struct list *files = &thread_current()->files;
+  while(!list_empty (files))
+  {
+    e = list_pop_front (files);
+    struct threadfile *f = list_entry (e, struct threadfile, fileelem);
+    lock_acquire(&filelock);
+    file_close (f->file);
+    lock_release(&filelock);
+    /*Remove the file in the list*/
+    list_remove (e);
+    /*Free the resource the file obtain*/
+    free (f);
+  }
   
   list_remove (&thread_current()->allelem);
   thread_current ()->status = THREAD_DYING;
@@ -492,7 +524,22 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
-  t->vreturn=0;
+  /* File system */
+  t->nowfile = NULL;
+  t->nfd = 2;
+  if (t==initial_thread) t->parent=NULL;
+  /* Record the parent's thread */
+  else t->parent = thread_current ();
+  /* List initialization for lists */
+  list_init (&t->childs);
+  list_init (&t->files);
+  list_init (&t->files);
+  /* Semaphore initialization for lists */
+  sema_init (&t->sema, 0);
+  t->childSuccess = true;
+  /* Initialize exit status to MAX */
+  t->exitStatus = UINT32_MAX;
+
   t->magic = THREAD_MAGIC;
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
@@ -608,7 +655,7 @@ allocate_tid (void)
 
   return tid;
 }
-
+
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);

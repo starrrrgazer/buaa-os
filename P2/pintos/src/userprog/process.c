@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <threads/malloc.h>
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
@@ -17,67 +18,73 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "userprog/syscall.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+void push_argument (void **esp, int argc, char * argv[]);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t
-process_execute (const char *file_name) 
+process_execute (const char *file_name)
 //!线程创建函数 file_name包含了我们要执行的函数和后面的参数
 //!修改大概就是将文件名和参数分开取出文件名传递给thread_create
 {
-  char *fn_copy;//!函数strtok_R会改变原符号串，所以要一份复制的
+  
+  char *fn_copy = malloc(strlen(file_name)+1);//!函数strtok_R会改变原符号串，所以要一份复制的
+  char *myfn_copy = malloc(strlen(file_name)+1);
   tid_t tid;
-
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
-  fn_copy= palloc_get_page (0);//!palloc_get_page(0)动态分配了一个内存页
-  if (fn_copy== NULL)
-    return TID_ERROR;
   
   //!
-  strlcpy (fn_copy, file_name, PGSIZE);
+  strlcpy (fn_copy, file_name, strlen(file_name)+1);
+  strlcpy (myfn_copy, file_name, strlen(file_name)+1);
+
 
   /* Create a new thread to execute FILE_NAME. */
   //!
   char *save_ptr;
-  char *rname = strtok_r(file_name, " ", &save_ptr);
+  char *rname = strtok_r(myfn_copy, " ", &save_ptr);
   tid = thread_create (rname, PRI_DEFAULT, start_process, fn_copy);
   //!thread_create()函数创建一个内核线程用来执行这个线程
-  if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+  free (myfn_copy);
+  if (tid == TID_ERROR){
+    free (fn_copy);
+    return tid;
+  }
 
-  /* wll update .信号量修改和子进程运行的判断*/
+ /* wll update .信号量修改和子进程运行的判断*/
   sema_down(&thread_current()->sema);//降低父进程的信号量，等待子进程创建结束
   if (!thread_current()->childSuccess) return TID_ERROR;//子进程加载可执行文件失败报错 
   return tid;
 }
 
+
+
 /* A thread function that loads a user process and starts it
    running. */
 static void
 start_process (void *file_name_)
-//!压栈
 {
-  
   char *file_name = file_name_;
-  struct intr_frame if_;//!栈
+  struct intr_frame if_;
   bool success;
-char *fn_copy=malloc(strlen(file_name)+1);
+//!
+  char *fn_copy=malloc(strlen(file_name)+1);
   strlcpy(fn_copy,file_name,strlen(file_name)+1);
-
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+
   //!
-//!分割文件名
+  //!分割文件名
   char *save_ptr;
   char *rname;
   rname=strtok_r(file_name," ",&save_ptr);
@@ -85,29 +92,24 @@ char *fn_copy=malloc(strlen(file_name)+1);
   //!
   //!加载成功successs为ture，且load初始化esp
   success = load (rname, &if_.eip, &if_.esp);
-  /* If load failed, quit. */
-  /* wll update.
-  * 这里要额外进行load失败和成果后的操作，对父进程的影响；
-  */
   if (!success){
    // palloc_free_page (file_name);
-   thread_current()->vreturn=-1;
    thread_current()->parent->childSuccess = false; //! 父进程记录子进程的失败
    sema_up(&thread_current()->parent->sema); //!增加父进程的信号量，通知父进程
     thread_exit ();
   }
-  //!
-    char *save_ptr2;
+    /* Our implementation for Task 1:
+      Calculate the number of parameters and the specification of parameters */
     char* esp=if_.esp;
     char* argv[300];
     char* argv1[300];
     int i,j,espmove,argc=0;
     char* name;
     ;
-    for(name=strtok_r(fn_copy," ",&save_ptr2);name!=NULL;name=strtok_r(NULL," ",&save_ptr2)){
-      //espmove=strlen(name)+1;
-      //esp-=espmove;
-      //memcpy (esp, name, strlen(name)+1);
+    for(name=strtok_r(fn_copy," ",&save_ptr);name!=NULL;name=strtok_r(NULL," ",&save_ptr)){
+      espmove=strlen(name)+1;//?
+      esp-=espmove;//?
+      memcpy (esp, name, strlen(name)+1);//?
       argv1[argc]=name;
       //printf("(arg00)%s\n",argv1[argc]);
       argv[argc]=esp;
@@ -115,44 +117,42 @@ char *fn_copy=malloc(strlen(file_name)+1);
       argc++;
     }
     i=argc-1;
-    for(i=argc-1;i>=0;i--){
-      espmove=strlen(argv1[i])+1;
-      esp-=espmove;
-      memcpy (esp, argv1[i], strlen(argv1[i])+1);
-      printf("(arg1)%s %#X\n",esp,esp);
-      argv[i]=esp;
-     //printf("(arg00)%#X\n",(int *)argv[i]);
-    }
+    // for(i=argc-1;i>=0;i--){
+    //   espmove=strlen(argv1[i])+1;
+    //   esp-=espmove;
+    //   memcpy (esp, argv1[i], strlen(argv1[i])+1);
+    //   printf("(arg1)%s %#X\n",esp,esp);
+    //   argv[i]=esp;
+    //  //printf("(arg00)%#X\n",(int *)argv[i]);
+    // }
     while((int)esp%4!=0){
       esp--;
     }
     esp = esp -4;
   (*(int*)esp)  = 0;
-    printf("(arg2)%d %#X\n",*(int*)esp,esp);
+    //printf("(arg2)%d %#X\n",*(int*)esp,esp);
     int *p=esp;
     p--;
     for(i=argc-1;i>=0;i--){
       *p=(int *)argv[i];
-      printf("(arg3)%#X %#X\n",*p,(int *)p);
+      //printf("(arg3)%#X %#X\n",*p,(int *)p);
       p--;
     }
     *p=p+1;
-    printf("(arg4)%#X %#X\n",*p,(int *)p);
+    //printf("(arg4)%#X %#X\n",*p,(int *)p);
     p--;
     *p=argc;
-    printf("(arg5)%d %#X\n",*p,(int *)p);
+    //printf("(arg5)%d %#X\n",*p,(int *)p);
     p--;
     *p=0;
-    printf("(arg6)%d %#X\n",*p,(int *)p);
-    p--;
-    esp=esp+4;
+    //printf("(arg6)%d %#X\n",*p,(int *)p);
+    if_.esp=p;
     
-    if_.esp=esp;
-
-    thread_current ()->parent->childSuccess = true;//! 父进程记录子进程的成功
+     thread_current ()->parent->childSuccess = true;//! 父进程记录子进程的成功
     sema_up (&thread_current ()->parent->sema);//! 增加父进程的信号量，通知父进程
-    palloc_free_page (file_name);
-  
+
+
+
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -164,7 +164,6 @@ char *fn_copy=malloc(strlen(file_name)+1);
   NOT_REACHED ();
 }
 
-
 /* Waits for thread TID to die and returns its exit status.  If
    it was terminated by the kernel (i.e. killed due to an
    exception), returns -1.  If TID is invalid or if it was not a
@@ -174,6 +173,7 @@ char *fn_copy=malloc(strlen(file_name)+1);
 
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
+
 /*
 * wll update.
 * 如果pid仍然存在，则等待它终止。然后，返回pid传递给的状态exit。如果pid没有调用exit()，而是被内核终止（例如，由于异常而终止），则wait(pid)必须返回 -1。
@@ -239,27 +239,25 @@ process_exit (void)
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
-  if (pd != NULL) 
-    {
-      /* Correct ordering here is crucial.  We must set
-         cur->pagedir to NULL before switching page directories,
-         so that a timer interrupt can't switch back to the
-         process page directory.  We must activate the base page
-         directory before destroying the process's page
-         directory, or our active page directory will be one
-         that's been freed (and cleared). */
-     //!
-     //!添加输出 thread_name()：传递给process_execute() 的全名
-      printf("%s: exit(%d) \n",thread_name(),cur->vreturn);
-      cur->pagedir = NULL;
-      pagedir_activate (NULL);
-      pagedir_destroy (pd);
-    }
+  if (pd != NULL)
+  {
+    /* Correct ordering here is crucial.  We must set
+        cur->pagedir to NULL before switching page directories,
+        so that a timer interrupt can't switch back to the
+        process page directory.  We must activate the base page
+        directory before destroying the process's page
+        directory, or our active page directory will be one
+        that's been freed (and cleared). */
+    //!输出
+    printf ("%s: exit(%d)\n",thread_name(), thread_current()->exitStatus);
+    cur->pagedir = NULL;
+    pagedir_activate (NULL);
+    pagedir_destroy (pd);
+  }
 }
 
 /* Sets up the CPU for running user code in the current
-   thread.
-   This function is called on every context switch. */
+   thread. This function is called on every context switch. */
 void
 process_activate (void)
 {
@@ -347,8 +345,9 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
    and its initial stack pointer into *ESP.
    Returns true if successful, false otherwise. */
 bool
-load (const char *file_name, void (**eip) (void), void **esp) 
+load (const char *file_name, void (**eip) (void), void **esp)
 {
+
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
@@ -358,18 +357,21 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
-  if (t->pagedir == NULL) 
+  if (t->pagedir == NULL)
     goto done;
   process_activate ();
 
   /* Open executable file. */
-  file = filesys_open (file_name);
-  if (file == NULL) 
-    {
-      printf ("load: %s: open failed\n", file_name);
-      goto done; 
-    }
 
+  file = filesys_open (file_name);
+  if (file == NULL)
+  {
+    printf ("load: %s: open failed\n", file_name);
+    goto done;
+  }
+  /* Deny write for the opened file by calling file deny write */
+  file_deny_write(file);
+  t->nowfile = file;
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
@@ -377,15 +379,15 @@ load (const char *file_name, void (**eip) (void), void **esp)
       || ehdr.e_machine != 3
       || ehdr.e_version != 1
       || ehdr.e_phentsize != sizeof (struct Elf32_Phdr)
-      || ehdr.e_phnum > 1024) 
+      || ehdr.e_phnum > 1024)
     {
       printf ("load: %s: error loading executable\n", file_name);
-      goto done; 
+      goto done;
     }
 
   /* Read program headers. */
   file_ofs = ehdr.e_phoff;
-  for (i = 0; i < ehdr.e_phnum; i++) 
+  for (i = 0; i < ehdr.e_phnum; i++)
     {
       struct Elf32_Phdr phdr;
 
@@ -396,7 +398,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       if (file_read (file, &phdr, sizeof phdr) != sizeof phdr)
         goto done;
       file_ofs += sizeof phdr;
-      switch (phdr.p_type) 
+      switch (phdr.p_type)
         {
         case PT_NULL:
         case PT_NOTE:
@@ -410,7 +412,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
         case PT_SHLIB:
           goto done;
         case PT_LOAD:
-          if (validate_segment (&phdr, file)) 
+          if (validate_segment (&phdr, file))
             {
               bool writable = (phdr.p_flags & PF_W) != 0;
               uint32_t file_page = phdr.p_offset & ~PGMASK;
@@ -425,7 +427,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
                   zero_bytes = (ROUND_UP (page_offset + phdr.p_memsz, PGSIZE)
                                 - read_bytes);
                 }
-              else 
+              else
                 {
                   /* Entirely zero.
                      Don't read anything from disk. */
@@ -442,6 +444,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
         }
     }
 
+
   /* Set up stack. */
   if (!setup_stack (esp))
     goto done;
@@ -453,7 +456,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
   return success;
 }
 
@@ -578,7 +580,7 @@ setup_stack (void **esp)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE-12;//!人为给系统调用参数留下空间，防止访问越界
+        *esp = PHYS_BASE;
       else
         palloc_free_page (kpage);
     }
