@@ -34,13 +34,15 @@ process_execute (const char *file_name)
 //!修改大概就是将文件名和参数分开取出文件名传递给thread_create
 {
   
-  char *fn_copy = malloc(strlen(file_name)+1);//!函数strtok_R会改变原符号串，所以要一份复制的
-  char *myfn_copy = malloc(strlen(file_name)+1);
+  char *fn_copy; //!函数strtok_R会改变原符号串，所以要一份复制的
+  char *myfn_copy;
   tid_t tid;
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   
   //!
+  fn_copy=palloc_get_page(0);
+  myfn_copy=palloc_get_page(1);
   strlcpy (fn_copy, file_name, strlen(file_name)+1);
   strlcpy (myfn_copy, file_name, strlen(file_name)+1);
 
@@ -51,14 +53,16 @@ process_execute (const char *file_name)
   char *rname = strtok_r(myfn_copy, " ", &save_ptr);
   tid = thread_create (rname, PRI_DEFAULT, start_process, fn_copy);
   //!thread_create()函数创建一个内核线程用来执行这个线程
-  free (myfn_copy);
+  palloc_free_page(myfn_copy);
   if (tid == TID_ERROR){
-    free (fn_copy);
+    palloc_free_page(fn_copy);
     return tid;
   }
-
+//palloc_free_page(fn_copy);
  /* wll update .信号量修改和子进程运行的判断*/
   sema_down(&thread_current()->sema);//降低父进程的信号量，等待子进程创建结束
+  //!
+  palloc_free_page(fn_copy);
   if (!thread_current()->childSuccess) return TID_ERROR;//子进程加载可执行文件失败报错 
   return tid;
 }
@@ -74,7 +78,9 @@ start_process (void *file_name_)
   struct intr_frame if_;
   bool success;
 //!
-  char *fn_copy=malloc(strlen(file_name)+1);
+  
+   char *fn_copy;
+   fn_copy=palloc_get_page(0);
   strlcpy(fn_copy,file_name,strlen(file_name)+1);
 
   /* Initialize interrupt frame and load executable. */
@@ -93,7 +99,7 @@ start_process (void *file_name_)
   //!加载成功successs为ture，且load初始化esp
   success = load (rname, &if_.eip, &if_.esp);
   if (!success){
-   // palloc_free_page (file_name);
+   palloc_free_page (fn_copy);
    thread_current()->parent->childSuccess = false; //! 父进程记录子进程的失败
    sema_up(&thread_current()->parent->sema); //!增加父进程的信号量，通知父进程
     thread_exit ();
@@ -107,9 +113,6 @@ start_process (void *file_name_)
     char* name;
     ;
     for(name=strtok_r(fn_copy," ",&save_ptr);name!=NULL;name=strtok_r(NULL," ",&save_ptr)){
-      espmove=strlen(name)+1;//?
-      esp-=espmove;//?
-      memcpy (esp, name, strlen(name)+1);//?
       argv1[argc]=name;
       //printf("(arg00)%s\n",argv1[argc]);
       argv[argc]=esp;
@@ -117,14 +120,14 @@ start_process (void *file_name_)
       argc++;
     }
     i=argc-1;
-    // for(i=argc-1;i>=0;i--){
-    //   espmove=strlen(argv1[i])+1;
-    //   esp-=espmove;
-    //   memcpy (esp, argv1[i], strlen(argv1[i])+1);
+    for(i=argc-1;i>=0;i--){
+       espmove=strlen(argv1[i])+1;
+       esp-=espmove;
+       memcpy (esp, argv1[i], strlen(argv1[i])+1);
     //   printf("(arg1)%s %#X\n",esp,esp);
-    //   argv[i]=esp;
+       argv[i]=esp;
     //  //printf("(arg00)%#X\n",(int *)argv[i]);
-    // }
+    }
     while((int)esp%4!=0){
       esp--;
     }
@@ -147,7 +150,7 @@ start_process (void *file_name_)
     *p=0;
     //printf("(arg6)%d %#X\n",*p,(int *)p);
     if_.esp=p;
-    
+    palloc_free_page(fn_copy);
      thread_current ()->parent->childSuccess = true;//! 父进程记录子进程的成功
     sema_up (&thread_current ()->parent->sema);//! 增加父进程的信号量，通知父进程
 
