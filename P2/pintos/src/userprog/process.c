@@ -72,7 +72,7 @@ process_execute (const char *file_name)
 /* A thread function that loads a user process and starts it
    running. */
 static void
-start_process (void *file_name_)
+start_pro+ess (void *file_name_)
 {
   char *file_name = file_name_;
   struct intr_frame if_;
@@ -196,7 +196,7 @@ start_process (void *file_name_)
 * 3.为了实现“父等子，子通知父”，当父进程调用wait等待子进程时，需要sema down子进程的信号量，然后在子进程exit时再sema up 子进程的信号量，这样就实现了通知父进程
 * 所以要在process_execute 降低父进程信号量 ， 在子进程的start_process增加父进程的信号量
 * 4.为了实现进程最多等待任何给定的子进程一次，多加了一个waited变量来判断这个进程是否已被wait过
-* 5.为了实现内核终止返回-1，这里需要检查指针，如果是中断的话，就将返回状态改为-1
+* 5.为了实现内核终止返回-1，这里需要修改exception.c 的 page_fault，如果是内核终端的话，就结束进程并返回状态改为-1
 */
 int
 process_wait (tid_t child_tid UNUSED) 
@@ -215,7 +215,7 @@ process_wait (tid_t child_tid UNUSED)
       {
         childPtr->waited = true;
         sema_down (&childPtr->sema);//等待子进程运行结束
-        break;//如果正在等待的那个子进程没有在运行了，则减少它的信号量（为了唤醒父进程）
+        break;
       } 
       else //子进程被等待过了，返回-1
       {
@@ -227,7 +227,7 @@ process_wait (tid_t child_tid UNUSED)
   if (childElem == list_end (childs)) {
     return -1;//没有找到对应子进程，返回-1
   }
-  //执行到这里说明子进程正常退出
+  //执行到这里说明子进程正常运行结束后退出
   list_remove (childElem);//从子进程列表中删除该子进程，因为它已经没有在运行了，也就是说父进程重新抢占回了资源
   return childPtr->exitStatus;//返回子进程的退出状态
 }
