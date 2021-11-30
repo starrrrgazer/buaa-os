@@ -32,6 +32,7 @@ void seek(struct intr_frame* f);
 void tell(struct intr_frame* f); 
 void close(struct intr_frame* f); 
 
+// struct lock filelock;
 
 struct thread_file * fileid(int id)   //依据文件句柄从进程打开文件表中找到文件指针
 { 
@@ -49,17 +50,6 @@ struct thread_file * fileid(int id)   //依据文件句柄从进程打开文件�
 
 }
 
-void 
-acquire_filelock ()
-{
-  acquire_lock();
-}
-
-void 
-release_filelock ()
-{
-  release_lock();
-}
 void
 syscall_init (void) 
 {
@@ -168,9 +158,9 @@ void write(struct intr_frame *f)
     struct threadfile *tf=fileid(*user_ptr);
     if(tf)
     {
-      acquire_filelock();
+      lock_acquire(&filelock);
       f->eax=file_write(tf->file,buf,size);
-      release_filelock();
+      lock_release(&filelock);
     }
     else{
       f->eax=0;
@@ -196,10 +186,10 @@ void exec(struct intr_frame* f){
     checkPtr (*(user_ptr + 1));
     *user_ptr++;
     //!
-    acquire_filelock();
+    lock_acquire(&filelock);
     f->eax = process_execute((const char*)* user_ptr);
     //!
-    release_filelock();
+    lock_release(&filelock);
 }
 
 /*
@@ -227,9 +217,9 @@ void create(struct intr_frame* f){
     checkPtr (user_ptr + 5);
     checkPtr (*(user_ptr + 4));
     user_ptr++;
-    acquire_filelock();
+    lock_acquire(&filelock);
     f->eax = filesys_create((const char*)*user_ptr,*(user_ptr+1));
-    release_filelock();
+    lock_release(&filelock);
 }
 /*
  * 在P2/pintos/src/filesys/filesys.c 里面有个
@@ -240,9 +230,9 @@ void remove(struct intr_frame* f){
   checkPtr(user_ptr + 1);
   checkPtr(*(user_ptr + 1));
   user_ptr++;
-  acquire_filelock();
+  lock_acquire(&filelock);
   f->eax = filesys_remove((const char*)*user_ptr);
-  release_filelock();
+  lock_release(&filelock);
   }
 
 void 
@@ -252,9 +242,9 @@ open (struct intr_frame* f)
   checkPtr (user_ptr + 1);
   checkPtr (*(user_ptr + 1));
   *user_ptr++;
-  acquire_filelock ();
+  lock_acquire(&filelock);
   struct file * opfile= filesys_open((const char *)*user_ptr);
-  release_filelock ();
+  lock_release(&filelock);
   struct thread *cur=thread_current(); 
   if (opfile!=NULL)
   {
@@ -301,9 +291,9 @@ read(struct intr_frame *f)
     struct threadfile * file =fileid (*user_ptr);
     if (file!=NULL)
     {
-      acquire_filelock ();
+      lock_acquire(&filelock);
       f->eax = file_read (file->file, buffer, size);
-      release_filelock ();
+      lock_release(&filelock);
     } 
     else
     {
@@ -322,9 +312,9 @@ filesize(struct intr_frame *f)
   struct threadfile *file =fileid (*user_ptr);
   if (file!=NULL)
   {
-    acquire_filelock ();
+    lock_acquire(&filelock);
     f->eax = file_length (file->file);
-    release_filelock ();
+    lock_release(&filelock);
   } 
   else
   {
@@ -341,9 +331,9 @@ void seek(struct intr_frame *f)
   struct threadfile *file = fileid(*user_ptr);
   if (file != NULL)
   {
-    acquire_filelock ();
+    lock_acquire(&filelock);
     file_seek(file->file, *(user_ptr + 1));
-    release_filelock ();
+    lock_release(&filelock);
   }
 }
 void tell(struct intr_frame *f)
@@ -354,9 +344,9 @@ void tell(struct intr_frame *f)
   struct threadfile *file = fileid(*user_ptr);
   if (file != NULL)
   {
-    acquire_filelock ();
+    lock_acquire(&filelock);
     f->eax = file_tell(file->file);
-    release_filelock ();
+    lock_release(&filelock);
   }
   else
   {
@@ -369,9 +359,9 @@ void close(struct intr_frame *f) {
   *user_ptr++;
   struct threadfile *file = fileid(*user_ptr);
   if(file!=NULL){
-    acquire_filelock ();
+    lock_acquire(&filelock);
     file_close(file->file);
-    release_filelock ();
+    lock_release(&filelock);
     list_remove(&file->fileelem);
     free(file);
   }

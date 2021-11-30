@@ -2,6 +2,6 @@
 #define USERPROG_SYSCALL_H
 
 void syscall_init (void);
-static struct lock filelock ;
+struct lock filelock ;
 
 #endif /* userprog/syscall.h */
