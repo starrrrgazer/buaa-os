@@ -142,6 +142,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 void write(struct intr_frame *f)
 {
   uint32_t *user_ptr = f->esp;
+  
   checkPtr(*(user_ptr+6));
   checkPtr(user_ptr+7);
   *user_ptr++;
@@ -195,7 +196,7 @@ void exec(struct intr_frame* f){
 /*
  * wll update wait,create,remove
  * uint32_t *user_ptr = f->esp; -----esp此时指向栈顶
- * user_ptr++;--------指针指向第一个参数，再加一就是第二个参数
+ * user_ptr++;--------指针指向第一个参数
  * 是否还需要判断指针的合法性？
  * */
 /*
@@ -214,6 +215,7 @@ void wait(struct intr_frame* f){
 void create(struct intr_frame* f){
     uint32_t *user_ptr = f->esp; 
     //!
+
     checkPtr (user_ptr + 5);
     checkPtr (*(user_ptr + 4));
     user_ptr++;

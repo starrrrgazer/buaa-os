@@ -72,7 +72,7 @@ process_execute (const char *file_name)
 /* A thread function that loads a user process and starts it
    running. */
 static void
-start_pro+ess (void *file_name_)
+start_process (void *file_name_)
 {
   char *file_name = file_name_;
   struct intr_frame if_;
@@ -228,7 +228,7 @@ process_wait (tid_t child_tid UNUSED)
     return -1;//没有找到对应子进程，返回-1
   }
   //执行到这里说明子进程正常运行结束后退出
-  list_remove (childElem);//从子进程列表中删除该子进程，因为它已经没有在运行了，也就是说父进程重新抢占回了资源
+  list_remove (childElem);//也是释放资源
   return childPtr->exitStatus;//返回子进程的退出状态
 }
 
