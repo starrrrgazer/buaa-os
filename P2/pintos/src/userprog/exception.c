@@ -150,10 +150,9 @@ page_fault (struct intr_frame *f)
   
 /*wll update. 
 * They also assume that you've modified page_fault() so that a page fault in the kernel merely sets eax to 0xffffffff and copies its former value into eip.
-* 如果是write是true说明是读写造成的错误，要在这个条件下修改
-* 
+* bool user;         /* True: access by user, false: access by kernel. 
+* 所以如果user是false说明是内核终止，故判断user
 */
-//!!!!!!!
    if (!user)
    {
       f->eip = f->eax;

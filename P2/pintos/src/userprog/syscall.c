@@ -32,6 +32,7 @@ void seek(struct intr_frame* f);
 void tell(struct intr_frame* f); 
 void close(struct intr_frame* f); 
 
+// struct lock filelock;
 
 struct threadfile * fileid(int id)   //依据文件句柄从进程打开文件表中找到文件指针
 { 
@@ -141,6 +142,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 void write(struct intr_frame *f)
 {
   uint32_t *user_ptr = f->esp;
+  
   checkPtr(*(user_ptr+6));
   checkPtr(user_ptr+7);
   *user_ptr++;
@@ -214,6 +216,7 @@ void wait(struct intr_frame* f){
 void create(struct intr_frame* f){
     uint32_t *user_ptr = f->esp; 
     //!
+
     checkPtr (user_ptr + 5);
     checkPtr (*(user_ptr + 4));
     user_ptr++;
