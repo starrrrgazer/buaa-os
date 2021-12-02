@@ -126,7 +126,7 @@ struct thread
 
     /*wll update*/
     struct semaphore sema;
-    struct list childs; //! 或许不需要
+    struct list childs; 
     struct child* childThread;   //作为子进程该有的属性
     struct thread* parent;
     bool childSuccess;  //判断子进程是否成功运行

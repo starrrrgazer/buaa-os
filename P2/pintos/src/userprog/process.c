@@ -104,8 +104,7 @@ start_process (void *file_name_)
    sema_up(&thread_current()->parent->sema); //!增加父进程的信号量，通知父进程
     thread_exit ();
   }
-    /* Our implementation for Task 1:
-      Calculate the number of parameters and the specification of parameters */
+    
     char* esp=if_.esp;
     char* argv[300];
     char* argv1[300];
@@ -115,7 +114,7 @@ start_process (void *file_name_)
     for(name=strtok_r(fn_copy," ",&save_ptr);name!=NULL;name=strtok_r(NULL," ",&save_ptr)){
       argv1[argc]=name;
       //printf("(arg00)%s\n",argv1[argc]);
-      argv[argc]=esp;
+      //argv[argc]=esp;
       //printf("(arg1)%s %#X\n",name,(int *)argv[argc]);
       argc++;
     }
@@ -182,17 +181,20 @@ start_process (void *file_name_)
 * 如果pid仍然存在，则等待它终止。然后，返回pid传递给的状态exit。如果pid没有调用exit()，而是被内核终止（例如，由于异常而终止），则wait(pid)必须返回 -1。
 * wait 如果以下任何条件为真，则必须失败并立即返回 -1：
 * 1.pid 不引用调用进程的直接子进程。 pid 是调用进程的直接子进程，当且仅当调用进程收到 pid 作为成功调用 exec 的返回值。
-请注意，子进程不会被继承：如果 A 产生子进程 B 并且 B 产生子进程 C，那么 A 不能等待 C，即使 B 已经死了。 进程 A 对 wait(C) 的调用必须失败。 类似地，如果孤立进程的父进程在它们退出之前退出，则不会将孤立进程分配给新的父进程。
+请注意，子进程不会被继承：如果 A 产生子进程 B 并且 B 产生子进程 C，那么 A 不能等待 C，即使 B 已经死了。 进程 A 对 wait(C) 的调用必须失败
+。 类似地，如果孤立进程的父进程在它们退出之前退出，则不会将孤立进程分配给新的父进程。
 翻译一下：就是子进程的不是当前进程的子进程,返回-1
 * 2.调用wait的进程已经调用了wait on pid。 也就是说，一个进程最多可以等待任何给定的孩子一次。
 * 3.被内核终止。在exception.c kill()中可以发现当出现意外结束时，存在判断，调用了thread exit
 * 4.否则返回线程退出的状态
 * 这里我们要保证子进程一定成功创建，就需要实现一个同步锁，来保证子进程load成功才接着执行父进程，子进程一旦创建失败，说明该该调用失败了。
-*	而对于wait操作，很明显也需要一个锁，保证父进程在子进程执行期间无法进行任何操作，等待子进程退出后，父进程获取子进程退出码，并回收资源。这里的锁的设计非常精妙，要保证父进程wait时，无法执行任何操作，子进程退出时，需要立刻通知父进程，但不能直接销毁，而要等待父进程来回收资源获取返回码等，然后才可以正常销毁。
+*	而对于wait操作，很明显也需要一个锁，保证父进程在子进程执行期间无法进行任何操作，等待子进程退出后，父进程获取子进程退出码，并回收资源。
+这里的锁的设计非常精妙，要保证父进程wait时，无法执行任何操作，子进程退出时，需要立刻通知父进程，但不能直接销毁，而要等待父进程来回收资源获取返回码等，然后才可以正常销毁。
 * 
 * 1.process_execute 是线程创建函数，里面调用了thread_create
 * 为了判断进程id到底是不是子进程，需要一个记住子进程的队列，这一部分要在thread_create里面初始化
-* 2.为了实现“子进程一定成功创建”，在子进程创建时调用的start pocess里对load的结果success额外做了补充。首先是父进程在process execute里降低信号量，等待子进程创建成功的消息，然后子进程在创建时调用的start process用sema up父进程信号量来实现同步锁
+* 2.为了实现“子进程一定成功创建”，在子进程创建时调用的start pocess里对load的结果success额外做了补充。首先是父进程在process execute里降低信号量，
+等待子进程创建成功的消息，然后子进程在创建时调用的start process用sema up父进程信号量来实现同步锁
 * 3.为了实现“父等子，子通知父”，当父进程调用wait等待子进程时，需要sema down子进程的信号量，然后在子进程exit时再sema up 子进程的信号量，这样就实现了通知父进程
 * 所以要在process_execute 降低父进程信号量 ， 在子进程的start_process增加父进程的信号量
 * 4.为了实现进程最多等待任何给定的子进程一次，多加了一个waited变量来判断这个进程是否已被wait过
@@ -228,7 +230,7 @@ process_wait (tid_t child_tid UNUSED)
     return -1;//没有找到对应子进程，返回-1
   }
   //执行到这里说明子进程正常退出
-  list_remove (childElem);//从子进程列表中删除该子进程，因为它已经没有在运行了，也就是说父进程重新抢占回了资源
+  list_remove (childElem);//也是释放资源
   return childPtr->exitStatus;//返回子进程的退出状态
 }
 

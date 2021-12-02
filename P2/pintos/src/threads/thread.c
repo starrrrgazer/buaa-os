@@ -73,17 +73,6 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
-void 
-acquire_lock ()
-{
-  lock_acquire(&filelock);
-}
-
-void 
-release_lock ()
-{
-  lock_release(&filelock);
-}
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -200,12 +189,7 @@ thread_create (const char *name, int priority,
   /*wll update.只要是对父子进程相关的变量进行一个初始化*/
   /*记录进程的父进程*/
   //!
-  // if(t == initial_thread) {
-  //   t->parent = NULL;
-  // }
-  // else{
-  //   t->parent = thread_current();
-  // }
+ 
   list_init(&t->childs);
   sema_init(&t->sema,0);
   t->childSuccess = true;

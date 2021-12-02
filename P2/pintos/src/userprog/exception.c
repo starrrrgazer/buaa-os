@@ -151,7 +151,7 @@ page_fault (struct intr_frame *f)
 /*wll update. 
 * They also assume that you've modified page_fault() so that a page fault in the kernel merely sets eax to 0xffffffff and copies its former value into eip.
 * 如果是write是true说明是读写造成的错误，要在这个条件下修改
-* //! 可能有问题
+* 
 */
 //!!!!!!!
    if (!user)
