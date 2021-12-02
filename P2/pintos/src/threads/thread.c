@@ -72,6 +72,7 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -192,14 +193,14 @@ thread_create (const char *name, int priority,
   list_init(&t->childs);
   sema_init(&t->sema,0);
   t->childSuccess = true;
-  t->exitStatus = UINT32_MAX;
+  t->exitStatus = -1;
   /*初始化子进程*/
   t->childThread = malloc(sizeof(struct child));
   t->childThread->tid = tid;
   sema_init(&t->childThread->sema,0);
 
   list_push_back(&thread_current()->childs,&t->childThread->child_elem);
-  t->childThread->exitStatus = UINT32_MAX;
+  t->childThread->exitStatus = -1;
   t->childThread->waited = false;
 
 
@@ -316,10 +317,10 @@ thread_exit (void)
 /*wll update.在进程退出时，需要结束自己的全部子进程*/
   thread_current()->childThread->exitStatus = thread_current()->exitStatus;
   sema_up(&thread_current()->childThread->sema);
-//! 这一步是子进程尝试修改父进程写的可执行文件(创建进程时打开的那一个文件，子进程是禁止修改的，load函数里调用了file_deny_write，禁止了子进程，其实是所有进程进行修改这个文件），子进程修改失败后退出，为了父进程可以再次改写这个文件，子进程需要恢复这个文件的修改权限，所以调用了file_close
+//!nowfile是子进程的可执行文件（进程创建文件）子进程退出时修改文件为可修改，让父进程得到修改该文件的能力
   file_close (thread_current ()->nowfile);
 
-  //! 这一步是为了实现资源释放，获取当前线程拥有的所有文件，然后全部关闭
+  //!进程关闭时释放所有的文件资源
   struct list_elem *e;
   struct list *files = &thread_current()->files;
   while(!list_empty (files))

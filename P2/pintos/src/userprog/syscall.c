@@ -32,7 +32,6 @@ void seek(struct intr_frame* f);
 void tell(struct intr_frame* f); 
 void close(struct intr_frame* f); 
 
-// struct lock filelock;
 
 struct threadfile * fileid(int id)   //依据文件句柄从进程打开文件表中找到文件指针
 { 
@@ -80,7 +79,7 @@ syscall_init (void)
 * */
 void * checkPtr(const void *user_ptr){
   //是否指向了没有权限的位置
-  if(!is_user_vaddr(user_ptr)){ 
+  if(!is_user_vaddr(user_ptr) || user_ptr == NULL || user_ptr < (const void *)0x08048000){ 
     thread_current()->exitStatus = -1;
     thread_exit();
   }
@@ -141,10 +140,13 @@ syscall_handler (struct intr_frame *f UNUSED)
 
 void write(struct intr_frame *f)
 {
-  uint32_t *user_ptr = f->esp;
-  
+  int *user_ptr = (int *)f->esp;
   checkPtr(*(user_ptr+6));
   checkPtr(user_ptr+7);
+  checkPtr((user_ptr + 3));
+  // for(int i=0;i<=7;i++){
+  //   printf("（3）%#X %#X\n",user_ptr+i,(int *)*(user_ptr+i));
+  // }
   *user_ptr++;
   int fd = *user_ptr;
   const char *buf = (const char *)*(user_ptr + 1);
@@ -176,16 +178,19 @@ void halt(struct intr_frame* f){
 }
 /*wll update.这里需要记录进程退出的状态。*/
 void exit(struct intr_frame* f){
-    uint32_t *user_ptr = f->esp;
-    checkPtr (user_ptr + 1);
+    int *user_ptr = (int *)f->esp;
+    checkPtr (user_ptr + 3);
     *user_ptr++;
     thread_current()->exitStatus = *user_ptr;
     thread_exit ();
 }
 void exec(struct intr_frame* f){
-    uint32_t *user_ptr = f->esp;
-    checkPtr (user_ptr + 1);
-    checkPtr (*(user_ptr + 1));
+    int *user_ptr = (int *)f->esp;
+    checkPtr (user_ptr + 3);
+    checkPtr (*(user_ptr + 3));
+  //   for(int i=0;i<=3;i++){
+  //   printf("（1）%#X %#X\n",user_ptr+i,(int *)*(user_ptr+i));
+  // }
     *user_ptr++;
     //!
     lock_acquire(&filelock);
@@ -196,7 +201,7 @@ void exec(struct intr_frame* f){
 
 /*
  * wll update wait,create,remove
- * uint32_t *user_ptr = f->esp; -----esp此时指向栈顶
+ * int *user_ptr = (int *)f->esp; -----esp此时指向栈顶
  * user_ptr++;--------指针指向第一个参数
  * 是否还需要判断指针的合法性？
  * */
@@ -204,8 +209,8 @@ void exec(struct intr_frame* f){
 * 需要调用P2\pintos\src\userprog\process.c的process_wait (tid_t child_tid UNUSED) 
 * */
 void wait(struct intr_frame* f){
-  uint32_t *user_ptr = f->esp;
-  checkPtr(user_ptr + 1 );
+  int *user_ptr = (int *)f->esp;
+  checkPtr(user_ptr + 3 );
   user_ptr ++;
   f->eax = process_wait(*user_ptr);
 }
@@ -214,11 +219,14 @@ void wait(struct intr_frame* f){
  * filesys_create (const char *name, off_t initial_size)函数，直接调用
  * */
 void create(struct intr_frame* f){
-    uint32_t *user_ptr = f->esp; 
+    int *user_ptr = (int *)f->esp; 
     //!
-
     checkPtr (user_ptr + 5);
     checkPtr (*(user_ptr + 4));
+  //   for(int i=0;i<=5;i++){
+  //   printf("（2）%#X %#X\n",user_ptr+i,(int *)*(user_ptr+i));
+  // }
+  
     user_ptr++;
     lock_acquire(&filelock);
     f->eax = filesys_create((const char*)*user_ptr,*(user_ptr+1));
@@ -229,9 +237,10 @@ void create(struct intr_frame* f){
  * filesys_remove (const char *name) 函数，直接调用
  * */
 void remove(struct intr_frame* f){
-  uint32_t *user_ptr = f->esp;
-  checkPtr(user_ptr + 1);
-  checkPtr(*(user_ptr + 1));
+  int *user_ptr = (int *)f->esp;
+  checkPtr(user_ptr + 3);
+  checkPtr(*(user_ptr + 3));
+  
   user_ptr++;
   lock_acquire(&filelock);
   f->eax = filesys_remove((const char*)*user_ptr);
@@ -241,9 +250,10 @@ void remove(struct intr_frame* f){
 void 
 open (struct intr_frame* f)
 {
-  uint32_t *user_ptr = f->esp;
-  checkPtr (user_ptr + 1);
-  checkPtr (*(user_ptr + 1));
+  int *user_ptr = (int *)f->esp;
+  checkPtr (user_ptr + 3);
+  checkPtr (*(user_ptr + 3));
+  
   *user_ptr++;
   lock_acquire(&filelock);
   struct file * opfile= filesys_open((const char *)*user_ptr);
@@ -268,7 +278,7 @@ void
 read(struct intr_frame *f) 
 { 
 
-  uint32_t *user_ptr = f->esp;
+  int *user_ptr = (int *)f->esp;
   //!
   
   *user_ptr++;
@@ -308,8 +318,9 @@ void
 filesize(struct intr_frame *f) 
 {  
 
-  uint32_t *user_ptr = f->esp;
-  checkPtr (user_ptr + 1);
+  int *user_ptr = (int *)f->esp;
+  checkPtr (user_ptr + 3);
+  
   *user_ptr++;
   struct threadfile *file =fileid (*user_ptr);
   if (file!=NULL)
@@ -327,8 +338,9 @@ filesize(struct intr_frame *f)
 
 void seek(struct intr_frame *f)
 {
-  uint32_t *user_ptr = f->esp;
+  int *user_ptr = (int *)f->esp;
   checkPtr(user_ptr + 5);
+  
   *user_ptr++;
   struct threadfile *file = fileid(*user_ptr);
   if (file != NULL)
@@ -340,8 +352,9 @@ void seek(struct intr_frame *f)
 }
 void tell(struct intr_frame *f)
 {
-  uint32_t *user_ptr = f->esp;
-  checkPtr(user_ptr + 1);
+  int *user_ptr = (int *)f->esp;
+  checkPtr(user_ptr + 3);
+  
   *user_ptr++;
   struct threadfile *file = fileid(*user_ptr);
   if (file != NULL)
@@ -356,8 +369,9 @@ void tell(struct intr_frame *f)
   }
 }
 void close(struct intr_frame *f) { 
-  uint32_t *user_ptr = f->esp; 
-  checkPtr(user_ptr + 1);
+  int *user_ptr = (int *)f->esp; 
+  checkPtr(user_ptr + 3);
+  
   *user_ptr++;
   struct threadfile *file = fileid(*user_ptr);
   if(file!=NULL){
