@@ -37,7 +37,7 @@
 #include "filesys/filesys.h"
 #include "filesys/fsutil.h"
 #endif
-
+#include "vm/frame.h"
 /* Page directory with kernel mappings only. */
 uint32_t *init_page_dir;
 
@@ -125,6 +125,11 @@ main (void)
   ide_init ();
   locate_block_devices ();
   filesys_init (format_filesys);
+#endif
+
+#ifdef VM
+  /* Initialize file system. */
+  init_frame();
 #endif
 
   printf ("Boot complete.\n");

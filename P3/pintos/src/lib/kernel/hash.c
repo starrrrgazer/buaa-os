@@ -261,7 +261,7 @@ hash_empty (struct hash *h)
 #define FNV_32_PRIME 16777619u
 #define FNV_32_BASIS 2166136261u
 
-/* Returns a hash of the SIZE bytes in BUF. */
+/* Returns a hash of the SIZE bytes in BUF. 返回BUF中SIZE字节的哈希值。*/
 unsigned
 hash_bytes (const void *buf_, size_t size)
 {

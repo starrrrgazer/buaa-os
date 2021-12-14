@@ -35,7 +35,7 @@ struct hash_elem
    the structure that HASH_ELEM is embedded inside.  Supply the
    name of the outer structure STRUCT and the member name MEMBER
    of the hash element.  See the big comment at the top of the
-   file for an example. */
+   file for an example.将指向哈希元素HASH_ELEM的指针转换为指向HASH_ELEM所在结构的指针 */
 #define hash_entry(HASH_ELEM, STRUCT, MEMBER)                   \
         ((STRUCT *) ((uint8_t *) &(HASH_ELEM)->list_elem        \
                      - offsetof (STRUCT, MEMBER.list_elem)))
@@ -54,7 +54,6 @@ typedef bool hash_less_func (const struct hash_elem *a,
 /* Performs some operation on hash element E, given auxiliary
    data AUX. */
 typedef void hash_action_func (struct hash_elem *e, void *aux);
-
 /* Hash table. */
 struct hash 
   {
@@ -63,7 +62,7 @@ struct hash
     struct list *buckets;       /* Array of `bucket_cnt' lists. */
     hash_hash_func *hash;       /* Hash function. */
     hash_less_func *less;       /* Comparison function. */
-    void *aux;                  /* Auxiliary data for `hash' and `less'. */
+    void *aux;                  /* Auxiliary data for `hash' and `less'. 用于 "hash "和 "less "的辅助数据*/
   };
 
 /* A hash table iterator. */
