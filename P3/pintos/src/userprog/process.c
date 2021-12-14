@@ -20,6 +20,8 @@
 #include "threads/vaddr.h"
 #include "userprog/syscall.h"
 #include "vm/frame.h"
+#include "threads/malloc.h"
+#include "vm/page.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -242,7 +244,9 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
-
+  //p3进程退出时释放spt
+  free(cur->spt);
+  cur->spt=NULL;
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
@@ -364,6 +368,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
+  //p3 也要申请辅助页面表spt
+  t->spt = vm_create_spt();
   if (t->pagedir == NULL)
     goto done;
   process_activate ();
@@ -550,7 +556,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
       /* Get a page of memory. */
       // uint8_t *kpage = palloc_get_page (PAL_USER);
-      uint8_t *kpage = get_frame (PAL_USER);
+      uint8_t *kpage = vm_get_frame (PAL_USER);
       if (kpage == NULL)
         return false;
 
@@ -558,7 +564,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
         {
           // palloc_free_page (kpage);
-          free_frame(kpage);
+          vm_free_frame(kpage);
           return false; 
         }
       memset (kpage + page_read_bytes, 0, page_zero_bytes);
@@ -567,7 +573,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       if (!install_page (upage, kpage, writable)) 
         {
           // palloc_free_page (kpage);
-          free_frame(kpage);
+          vm_free_frame(kpage);
           return false; 
         }
 
@@ -588,7 +594,7 @@ setup_stack (void **esp)
   bool success = false;
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-  // kpage = get_frame(PAL_USER | PAL_ZERO);
+  // kpage = vm_get_frame(PAL_USER | PAL_ZERO);
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);

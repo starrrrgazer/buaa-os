@@ -129,7 +129,7 @@ main (void)
 
 #ifdef VM
   /* Initialize file system. */
-  init_frame();
+  vm_init_frame();
 #endif
 
   printf ("Boot complete.\n");

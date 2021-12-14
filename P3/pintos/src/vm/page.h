@@ -6,3 +6,4 @@
 #define BUAA_OS_PAGE_H
 
 #endif //BUAA_OS_PAGE_H
+struct supplemental_page_table* vm_create_spt ();

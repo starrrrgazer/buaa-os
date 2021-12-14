@@ -19,47 +19,17 @@
 /* 全局的锁保证操作frametable时不会被中断 */
 static struct lock mylock;
 
-/* 根据官方文档，用一个hash表来分配物理页，其中的hash是定义在lib/kernel/hash.c */
-/*下面是hash的结构
-struct hash 
-  {
-    size_t elem_cnt;            
-    size_t bucket_cnt;          
-    struct list *buckets;       
-    hash_hash_func *hash;       
-    hash_less_func *less;      
-    void *aux;                  
-  };
-*/
-static struct hash hash_frame_table;
-/*在hash表初始化函数中，需要定义两个函数
-hash_init (struct hash *h,hash_hash_func *hash, hash_less_func *less, void *aux) 
-其中
-typedef unsigned hash_hash_func (const struct hash_elem *e, void *aux);计算并返回哈希元素E的哈希值，给定的是辅助数据AUX。
-typedef bool hash_less_func (const struct hash_elem *a,
-                             const struct hash_elem *b,
-                             void *aux);比较两个哈希元素A和B的值，给定辅助数据AUX。
-   如果A小于B，则返回真，如果A大于或等于B，则返回
-   具体参考hash.h最上面的说明
-*/
-static unsigned my_hash_hash_func(const struct hash_elem *elem1, void *aux)
-{
-  struct frame_table *f = hash_entry(elem1, struct frame_table, elem);
-  return hash_bytes( &f->physical_address, sizeof(f->physical_address)  );
-}
-static bool my_hash_less_func(const struct hash_elem *elem1, const struct hash_elem *elem2, void *aux)
-{
-  struct frame_table *f1 = hash_entry(elem1, struct frame_table, elem);
-  struct frame_table *f2 = hash_entry(elem2, struct frame_table, elem);
-  return f1->physical_address < f2->physical_address;
-}
+/**/
+struct list frame_table;
+
+
 
 /*页框管理*/
-struct frame_table{
+struct frame_table_entry{
   /*对应的物理地址*/
   void *physical_address;       
-  /*hash表中的元素*/
-  struct hash_elem elem;     
+  /*list中的元素*/
+  struct list_elem elem;     
   /*对应的虚拟地址*/
   void *virtual_address; 
   /*对应的进程*/      
@@ -67,9 +37,9 @@ struct frame_table{
 };
 
 /*同时在init.c加上宏定义*/
-void init_frame (){
+void vm_init_frame (){
   lock_init (&mylock);
-  hash_init (&hash_frame_table, my_hash_hash_func, my_hash_less_func, NULL);
+  list_init(&frame_table);
 }
 
 
@@ -88,7 +58,7 @@ palloc_get_page (enum palloc_flags flags)
 
 /*在用户池中获取一个空闲页面并返回其内核虚拟地址。
 此处相对于palloc_get_page函数增加了用户池已满时的交换机制和物理地址的映射*/
-void* get_frame (enum palloc_flags flags){
+void* vm_get_frame (enum palloc_flags flags){
   lock_acquire (&mylock);
   
   /*获取一个空闲页并返回其内核虚拟地址*/
@@ -99,14 +69,14 @@ void* get_frame (enum palloc_flags flags){
     return NULL;
   }
 
-  struct frame_table *frame = malloc(sizeof(struct frame_table));
+  struct frame_table_entry *frame = malloc(sizeof(struct frame_table_entry));
   frame->thread = thread_current ();
   frame->virtual_address = virtual_page;
   //vtop返回内核虚拟地址所在的物理地址VADDR的映射。
   frame->physical_address = (void*) vtop(virtual_page);
-  //插入hash表
+  //插入list
   
-  hash_insert (&hash_frame_table, &frame->elem);
+  list_push_back(&frame_table,&frame->elem);
   lock_release (&mylock);
 
   return virtual_page;
@@ -118,20 +88,24 @@ palloc_free_page (void *page)
 {
   palloc_free_multiple (page, 1);
 }
-释放页面.此处相对于palloc_free_page,多一个hash表释放、frame_table释放的操作
+释放页面.此处相对于palloc_free_page,多一个list remove释放资源
 */
-void free_frame (void *virtual_page){
+void vm_free_frame (void *virtual_page){
   lock_acquire (&mylock);
-  struct frame_table ft;
-  ft.virtual_address=virtual_page;
-  //根据virtualpage在hash表里找到对应的elem
-  struct hash_elem *h = hash_find (&hash_frame_table, &(ft.elem));
-  struct frame_table *f;
-  //根据elem在hash表里找到对应的frame table * 
-  f = hash_entry(h, struct frame_table, elem);
-  hash_delete (&hash_frame_table, &f->elem);
-  palloc_free_page (f->virtual_address);
-  free(f);
+  struct frame_table_entry *ft_ptr;
+  struct list_elem *e;
+  e = list_head (&frame_table);
+  while ((e = list_next (e)) != list_tail (&frame_table))
+    {
+      ft_ptr = list_entry (e, struct frame_table_entry, elem);
+      if (ft_ptr->virtual_address == virtual_page)
+        {
+          list_remove (e);
+          free (ft_ptr);
+          break;
+        }
+    }
+  palloc_free_page(virtual_page);
   lock_release (&mylock);
 }
 
