@@ -62,7 +62,7 @@ struct supplemental_page_table_entry* vm_spt_lookup (struct supplemental_page_ta
 
 
 /*将由地址virtual_page指定的页面装回内存中。*/
-bool vm_load_page(struct supplemental_page_table *spt, uint32_t *pagedir, void *virtual_page){
+bool vm_load_page(struct supplemental_page_table *spt, int *pagedir, void *virtual_page){
   /* see also userprog/exception.c */
 
   //先获取辅助页表
