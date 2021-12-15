@@ -593,15 +593,16 @@ setup_stack (void **esp)
   uint8_t *kpage;
   bool success = false;
 
-  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-  // kpage = vm_get_frame(PAL_USER | PAL_ZERO);
+  // kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+  kpage = vm_get_frame(PAL_USER | PAL_ZERO);
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
         *esp = PHYS_BASE;
       else
-        palloc_free_page (kpage);
+        // palloc_free_page (kpage);
+        vm_free_frame(kpage);
     }
   return success;
 }
@@ -615,13 +616,26 @@ setup_stack (void **esp)
    with palloc_get_page().
    Returns true on success, false if UPAGE is already mapped or
    if memory allocation fails. */
+/*在页表中添加一个从用户虚拟地址UPAGE到内核虚拟地址KPAGE的映射。
+   虚拟地址KPAGE的映射到页表中。
+   如果WRITABLE为真，用户进程可以修改该页。
+   否则，它是只读的。
+   UPAGE不能已经被映射。
+   KPAGE可能是一个从用户池中获得的页面
+   从用户池中获得的页面，使用palloc_get_page()。
+   成功时返回true，如果UPAGE已经被映射或
+   如果内存分配失败*/
 static bool
 install_page (void *upage, void *kpage, bool writable)
 {
   struct thread *t = thread_current ();
 
   /* Verify that there's not already a page at that virtual
-     address, then map our page there. */
+     address, then map our page there. 确认在该虚拟地址上还没有一个页面。
+     地址，然后将我们的页面映射到那里。*/
   return (pagedir_get_page (t->pagedir, upage) == NULL
-          && pagedir_set_page (t->pagedir, upage, kpage, writable));
+          && pagedir_set_page (t->pagedir, upage, kpage, writable)
+          && vm_spt_set_page(t->spt,upage)
+          );
+
 }

@@ -4,6 +4,10 @@
 #include "userprog/gdt.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "userprog/pagedir.h"
+#include "threads/vaddr.h"
+#include "vm/page.h"
+#include "vm/frame.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -148,18 +152,45 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
   
+//p3 update
+  //4.1.1补充页表表明用户进程不应该在它试图访问的地址处期待任何数据，
+   //4.1.2或者如果页面位于内核虚拟内存中，
+   //4.1.3或者如果访问是尝试写入只读页面，
+   //那么访问无效。任何无效访问都会终止进程，从而释放其所有资源。
+  if (fault_addr == NULL || !is_user_vaddr(fault_addr) || !not_present) {
+     f->eax=-1;
+     return;
+  }
+  /* 找到 void *fault_addr; 对应的页面*/
+  struct thread *curr = thread_current();
+  void* fault_page = (void*) pg_round_down(fault_addr);
+
+   //将数据载入内存
+  if(! vm_load_page(curr->spt, curr->pagedir, fault_page) ) {
+     f->eax=-1;
+     return;
+  }
+
+  // success
+  return;
+
+
+
 /*wll update. 
 * They also assume that you've modified page_fault() so that a page fault in the kernel merely sets eax to 0xffffffff and copies its former value into eip.
 * bool user;         /* True: access by user, false: access by kernel. 
 * user为false说明时内核中断
 */
-//!!!!!!!
    if (!user)
    {
       f->eip = f->eax;
       f->eax = -1;
       return;
    }
+   
+
+
+
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */

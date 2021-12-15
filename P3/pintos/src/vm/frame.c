@@ -4,10 +4,6 @@
 
 #include "frame.h"
 
-/* v1.0
-实现frametable的数据结构设计和基本管理（初始化，申请和释放）
-根据官方文档，也修改了process.c中的load_segment，将其修改为我设计的页框管理函数 
-*/
 
 #include "lib/kernel/hash.h"
 #include "threads/thread.h"
@@ -19,22 +15,7 @@
 /* 全局的锁保证操作frametable时不会被中断 */
 static struct lock mylock;
 
-/**/
-struct list frame_table;
 
-
-
-/*页框管理*/
-struct frame_table_entry{
-  /*对应的物理地址*/
-  void *physical_address;       
-  /*list中的元素*/
-  struct list_elem elem;     
-  /*对应的虚拟地址*/
-  void *virtual_address; 
-  /*对应的进程*/      
-  struct thread *thread;
-};
 
 /*同时在init.c加上宏定义*/
 void vm_init_frame (){
