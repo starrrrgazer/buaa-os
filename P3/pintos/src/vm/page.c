@@ -12,6 +12,7 @@
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
 #include "vm/frame.h"
+#include "string.h"
 
 
 unsigned page_hash(const struct hash_elem *p, void *aux) {
