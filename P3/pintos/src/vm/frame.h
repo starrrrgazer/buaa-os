@@ -5,9 +5,6 @@
 #ifndef BUAA_OS_FRAME_H
 #define BUAA_OS_FRAME_H
 
-#endif //BUAA_OS_FRAME_H
-
-
 #include "lib/kernel/hash.h"
 #include "threads/thread.h"
 #include "threads/malloc.h"
@@ -34,3 +31,9 @@ struct frame_table_entry{
 void vm_init_frame ();
 void* vm_get_frame (enum palloc_flags flags);
 void vm_free_frame (void *virtual_page);
+
+
+
+#endif //BUAA_OS_FRAME_H
+
+

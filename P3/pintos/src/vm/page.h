@@ -5,7 +5,6 @@
 #ifndef BUAA_OS_PAGE_H
 #define BUAA_OS_PAGE_H
 
-#endif //BUAA_OS_PAGE_H
 #include "lib/kernel/hash.h"
 
 #include "threads/synch.h"
@@ -63,4 +62,8 @@ struct supplemental_page_table_entry{
 
 struct supplemental_page_table* vm_create_spt ();
 bool vm_spt_set_page (struct supplemental_page_table *spt, void *virtual_page);
-bool vm_load_page(struct supplemental_page_table *spt, uint32_t *pagedir, void *virtual_page);
+bool vm_load_page(struct supplemental_page_table *spt, int *pagedir, void *virtual_page);
+
+
+
+#endif //BUAA_OS_PAGE_H
