@@ -98,7 +98,7 @@ bool vm_load_page(struct supplemental_page_table *spt, int *pagedir, void *virtu
     // 需要一个交换机制
     break;
 
-  case FILESYS:
+  case FROM_FILESYS:
     //需要一个文件系统相关的机制
     break;
 

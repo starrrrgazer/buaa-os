@@ -45,7 +45,7 @@ enum page_status {
   ALL_ZERO,         
   FRAME,         
   SWAP,
-  FILESYS
+  FROM_FILESYS
 };
 struct supplemental_page_table_entry{
   /*对应的物理地址,kpage*/
