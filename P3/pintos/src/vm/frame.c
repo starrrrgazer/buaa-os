@@ -10,12 +10,12 @@
 #include "threads/malloc.h"
 #include "threads/palloc.h"
 #include "threads/vaddr.h"
-
+#include "userprog/pagedir.h"
 
 /* 全局的锁保证操作frametable时不会被中断 */
 static struct lock mylock;
 
-
+struct frame_table_entry *pick_frame_to_evict(void);
 
 /*同时在init.c加上宏定义*/
 void vm_init_frame (){
@@ -48,6 +48,15 @@ void* vm_get_frame (enum palloc_flags flags){
   if (virtual_page == NULL) {
     //此处应该写一个交换机制
     return NULL;
+
+    struct frame_table_entry *f=pick_frame_to_evict();
+    ASSERT(f->thread !=NULL);
+
+
+
+
+
+
   }
 
   struct frame_table_entry *frame = malloc(sizeof(struct frame_table_entry));

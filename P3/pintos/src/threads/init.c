@@ -37,7 +37,13 @@
 #include "filesys/filesys.h"
 #include "filesys/fsutil.h"
 #endif
+
+#ifdef VM
 #include "vm/frame.h"
+#include "vm/swap.h"
+//!gbupdate:增加引用
+#endif
+
 /* Page directory with kernel mappings only. */
 uint32_t *init_page_dir;
 
@@ -131,6 +137,12 @@ main (void)
   /* Initialize file system. */
   vm_init_frame();
 #endif
+//!P3:gb:初始化
+#ifdef VM
+  vm_swap_init ();
+  
+#endif
+
 
   printf ("Boot complete.\n");
   

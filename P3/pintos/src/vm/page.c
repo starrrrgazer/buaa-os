@@ -48,6 +48,26 @@ bool vm_spt_set_page (struct supplemental_page_table *spt, void *virtual_page){
     return false;
   }
 }
+//!P3:
+//!gb:
+bool
+vm_spt_zeropage (struct supplemental_page_table *spt, void *virtual_page){
+  struct supplemental_page_table_entry *spte;
+  spte = (struct supplemental_page_table_entry *) malloc(sizeof(struct supplemental_page_table_entry));
+  spte->virtual_address = virtual_page;
+  spte->status = ALL_ZERO;
+  struct hash_elem *old;
+  old = hash_insert (&spt->pages, &spte->elem);
+  if (old == NULL) return true;
+  else
+  {
+    return false;
+  }
+  
+
+  // TODO there is already an entry.
+  
+}
 
 struct supplemental_page_table_entry* vm_spt_lookup (struct supplemental_page_table *spt, void *page)
 {

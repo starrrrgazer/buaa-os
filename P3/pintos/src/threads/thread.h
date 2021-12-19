@@ -121,6 +121,7 @@ struct thread
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
 
+   uint8_t *cesp;//!p3gb:用户程序堆栈指针的当前值。内核中可能会发生页面错误，因此我们可能需要在转换到内核模式时存储 esp。(4.3.3)
    //p3,辅助页表
    struct supplemental_page_table *spt;
 

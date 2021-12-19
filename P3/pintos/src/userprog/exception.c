@@ -9,6 +9,8 @@
 #include "vm/page.h"
 #include "vm/frame.h"
 
+#define MAXSIZE 0x800000
+#define MAX_STACK_SIZE 0x800000
 /* Number of page faults processed. */
 static long long page_fault_cnt;
 
@@ -164,6 +166,25 @@ page_fault (struct intr_frame *f)
   /* 找到 void *fault_addr; 对应的页面*/
   struct thread *curr = thread_current();
   void* fault_page = (void*) pg_round_down(fault_addr);
+//!P3:
+//!gb:
+   if(!not_present){
+      //!gb:无法写入（写入处是只读地区
+      f->eax=-1;
+     return;
+   }
+   //!gb:获取用户程序栈指针的当前值。 
+   //!如果page错误内核产生我们不能从intr_frame获取
+   //!所以我们在系统调用开始时将当前esp存储到线程中。
+   void* esp = user ? f->esp : curr->cesp;
+
+//!栈增长
+   bool onstack,isaddr;
+   if(esp <= fault_addr || fault_addr == f->esp - 4 || fault_addr == f->esp - 32){
+      if(fault_addr<PHYS_BASE && PHYS_BASE-MAXSIZE<=fault_addr){
+         vm_spt_zeropage (curr->spt, fault_page);
+      }
+   }
 
    //将数据载入内存
   if(! vm_load_page(curr->spt, curr->pagedir, fault_page) ) {

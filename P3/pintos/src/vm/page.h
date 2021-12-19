@@ -62,6 +62,7 @@ struct supplemental_page_table_entry{
 
 struct supplemental_page_table* vm_create_spt ();
 bool vm_spt_set_page (struct supplemental_page_table *spt, void *virtual_page);
+bool vm_spt_zeropage (struct supplemental_page_table *spt, void *virtual_page);
 bool vm_load_page(struct supplemental_page_table *spt, int *pagedir, void *virtual_page);
 
 

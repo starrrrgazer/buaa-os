@@ -133,6 +133,8 @@ syscall_handler (struct intr_frame *f UNUSED)
     thread_current()->exitStatus = -1;
     thread_exit ();
   }
+  //!p3 gb:存储页面错误处理程序中需要的 esp
+  thread_current ()-> cesp = f-> esp ;
   syscalls[type](f);
 
 }
