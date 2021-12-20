@@ -26,10 +26,11 @@ struct frame_table_entry{
   void *virtual_address; 
   /*对应的进程*/      
   struct thread *thread;
+  int unused_count;
 };
 
 void vm_init_frame ();
-void* vm_get_frame (enum palloc_flags flags);
+void* vm_get_frame (enum palloc_flags flags,void *upage);
 void vm_free_frame (void *virtual_page);
 
 

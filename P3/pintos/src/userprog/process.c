@@ -556,7 +556,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
       /* Get a page of memory. */
       // uint8_t *kpage = palloc_get_page (PAL_USER);
-      uint8_t *kpage = vm_get_frame (PAL_USER);
+      uint8_t *kpage = vm_get_frame (PAL_USER,upage);
       if (kpage == NULL)
         return false;
 
@@ -594,7 +594,7 @@ setup_stack (void **esp)
   bool success = false;
 
   // kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-  kpage = vm_get_frame(PAL_USER | PAL_ZERO);
+  kpage = vm_get_frame(PAL_USER | PAL_ZERO,PHYS_BASE-PGSIZE);
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);

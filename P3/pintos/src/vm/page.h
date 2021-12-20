@@ -6,7 +6,7 @@
 #define BUAA_OS_PAGE_H
 
 #include "lib/kernel/hash.h"
-
+#include "vm/swap.h"
 #include "threads/synch.h"
 #include "threads/malloc.h"
 #include "threads/palloc.h"
@@ -41,6 +41,7 @@ struct supplemental_page_table {
 根据官方文档， If the memory reference is valid, use the supplemental page table entry to locate the data that goes in the page, which might be in the file system, or in a swap slot, or it might simply be an all-zero page.
 将page的状态分类为all-zero,frame, swap,filesys
 */
+uint32_t swap_index;
 enum page_status {
   ALL_ZERO,         
   FRAME,         
@@ -58,13 +59,15 @@ struct supplemental_page_table_entry{
   struct thread *thread;
   /*page对应的状态*/
   enum page_status status;
+  uint32_t swap_index;
 };
 
 struct supplemental_page_table* vm_create_spt ();
 bool vm_spt_set_page (struct supplemental_page_table *spt, void *virtual_page);
 bool vm_spt_zeropage (struct supplemental_page_table *spt, void *virtual_page);
 bool vm_load_page(struct supplemental_page_table *spt, int *pagedir, void *virtual_page);
-
-
+bool vm_supt_set_swap (struct supplemental_page_table *supt, void *, uint32_t);
+bool vm_supt_has_entry (struct supplemental_page_table *, void *page);
+struct supplemental_page_table_entry* vm_spt_lookup (struct supplemental_page_table *supt, void *);
 
 #endif //BUAA_OS_PAGE_H

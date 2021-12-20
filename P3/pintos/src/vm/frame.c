@@ -4,7 +4,7 @@
 
 #include "frame.h"
 
-
+#include <stdio.h>
 #include "lib/kernel/hash.h"
 #include "threads/thread.h"
 #include "threads/malloc.h"
@@ -15,7 +15,7 @@
 /* 全局的锁保证操作frametable时不会被中断 */
 static struct lock mylock;
 
-struct frame_table_entry *pick_frame_to_evict(void);
+// struct frame_table_entry *pick_frame_to_evict(void);
 
 /*同时在init.c加上宏定义*/
 void vm_init_frame (){
@@ -39,7 +39,7 @@ palloc_get_page (enum palloc_flags flags)
 
 /*在用户池中获取一个空闲页面并返回其内核虚拟地址。
 此处相对于palloc_get_page函数增加了用户池已满时的交换机制和物理地址的映射*/
-void* vm_get_frame (enum palloc_flags flags){
+void* vm_get_frame (enum palloc_flags flags,void *upage){
   lock_acquire (&mylock);
   
   /*获取一个空闲页并返回其内核虚拟地址*/
@@ -48,22 +48,23 @@ void* vm_get_frame (enum palloc_flags flags){
   if (virtual_page == NULL) {
     //此处应该写一个交换机制
     return NULL;
+    // struct frame_table_entry *f=pick_frame_to_evict();
+    // ASSERT(f->thread !=NULL);
+    // pagedir_clear_page(f->thread->pagedir,f->virtual_address);
+    // uint32_t swap_index=vm_swap_out(f->physical_address);
+    // vm_supt_set_swap(f->thread->spt,f->virtual_address,swap_index);
+    // vm_free_frame(f->physical_address);
+    // virtual_page=palloc_get_page(PAL_USER|flags);
 
-    struct frame_table_entry *f=pick_frame_to_evict();
-    ASSERT(f->thread !=NULL);
-
-
-
-
-
-
+    ASSERT(virtual_page!=NULL);
   }
 
   struct frame_table_entry *frame = malloc(sizeof(struct frame_table_entry));
   frame->thread = thread_current ();
-  frame->virtual_address = virtual_page;
+  frame->virtual_address = upage;
   //vtop返回内核虚拟地址所在的物理地址VADDR的映射。
-  frame->physical_address = (void*) vtop(virtual_page);
+  frame->physical_address = virtual_page;
+  frame->unused_count=0;
   //插入list
   
   list_push_back(&frame_table,&frame->elem);
@@ -98,6 +99,17 @@ void vm_free_frame (void *virtual_page){
   palloc_free_page(virtual_page);
   lock_release (&mylock);
 }
+
+// struct frame_table_entry * 
+// pick_frame_to_evict()
+// {
+// 	struct list_elem * e;
+// 	struct frame_table_entry * victim_frame;
+//   e=list_back(&frame_table);
+//   victim_frame=list_entry(e,struct frame_table_entry, elem);
+// 	return victim_frame;
+// }
+
 
 
 

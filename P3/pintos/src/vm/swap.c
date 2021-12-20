@@ -56,7 +56,7 @@ void vm_swap_in (void *page, uint32_t swap_index)
   ASSERT (page >= PHYS_BASE);
   //!gb:检查交换表
   ASSERT (swap_index < ssize);
-  if (bitmap_test(sbitmap, swap_index) == false) {
+  if (bitmap_test(sbitmap, swap_index) == true) {
     printf("vm_swap_in err");
   }
   //!gb:读出

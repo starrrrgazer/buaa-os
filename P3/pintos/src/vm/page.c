@@ -30,13 +30,23 @@ struct supplemental_page_table* vm_create_spt (){
   hash_init (&spt->pages, page_hash, page_less, NULL);
   return spt;
 }
+bool vm_supt_set_swap(struct supplemental_page_table *supt, void *page, uint32_t swap_index){
+  struct supplemental_page_table_entry *spte;
+  spte = vm_spt_lookup(supt, page);
+//  printf("SPTE %u\n", spte);
+  if(spte == NULL) return false;
 
+  spte->status = SWAP;
+  spte->swap_index = swap_index;
+  return true;
+}
 /*载入一个页面*/
 bool vm_spt_set_page (struct supplemental_page_table *spt, void *virtual_page){
   struct supplemental_page_table_entry *spte;
   spte = (struct supplemental_page_table_entry *) malloc(sizeof(struct supplemental_page_table_entry));
   spte->virtual_address = virtual_page;
   spte->status = FRAME;
+  spte->swap_index=-1;
   /*将NEW插入哈希表H中，如果表中没有相同的元素，则返回一个空指针。*/
   struct hash_elem *old;
   old = hash_insert (&spt->pages, &spte->elem);
@@ -79,7 +89,14 @@ struct supplemental_page_table_entry* vm_spt_lookup (struct supplemental_page_ta
   if(elem1 == NULL) return NULL;
   return hash_entry(elem1, struct supplemental_page_table_entry, elem);
 }
-
+bool
+vm_supt_has_entry (struct supplemental_page_table *supt, void *page)
+{
+  /* Find the SUPT entry. If not found, it is an unmanaged page. */
+  struct supplemental_page_table_entry *spte = vm_spt_lookup(supt, page);
+  if(spte == NULL) return false;
+  return true;
+}
 
 /*将由地址virtual_page指定的页面装回内存中。*/
 bool vm_load_page(struct supplemental_page_table *spt, int *pagedir, void *virtual_page){
@@ -98,7 +115,7 @@ bool vm_load_page(struct supplemental_page_table *spt, int *pagedir, void *virtu
   }
 
   // 
-  void *frame_page = vm_get_frame(PAL_USER);
+  void *frame_page = vm_get_frame(PAL_USER,virtual_page);
   if(frame_page == NULL) {
     return false;
   }
@@ -116,6 +133,7 @@ bool vm_load_page(struct supplemental_page_table *spt, int *pagedir, void *virtu
 
   case SWAP:
     // 需要一个交换机制
+    vm_swap_in (spte->swap_index, frame_page);
     break;
 
   case FROM_FILESYS:
