@@ -39,31 +39,42 @@ uint32_t vm_swap_out (void *page)
   ASSERT (page >= PHYS_BASE);
   size_t i;
   //!gb:扫描block区域寻找可以使用的地方
-  size_t swap_index = bitmap_scan (sbitmap, 0, 1, true);
+  size_t swap_idx = bitmap_scan (sbitmap, 0, 1, true);
 
   //!gb:存入
   for (i=0;i<SPAGE;i++) {
-    block_write(sblock,swap_index*SPAGE+i,page+BLOCK_SECTOR_SIZE*i);
+    block_write(sblock,swap_idx*SPAGE+i,page+BLOCK_SECTOR_SIZE*i);
   }
-  bitmap_set(sbitmap, swap_index, false);
-  return swap_index;
+  bitmap_set(sbitmap, swap_idx, false);
+  return swap_idx;
 }
 
 //!gb:将swap内容写入page
-void vm_swap_in (void *page, uint32_t swap_index)
+void vm_swap_in (void *page, uint32_t swap_idx)
 {
   //!gb：检查此page是不是在虚拟内存
   ASSERT (page >= PHYS_BASE);
   //!gb:检查交换表
-  ASSERT (swap_index < ssize);
-  if (bitmap_test(sbitmap, swap_index) == true) {
+  ASSERT (swap_idx < ssize);
+  if (bitmap_test(sbitmap, swap_idx) == true) {
     printf("vm_swap_in err");
   }
   //!gb:读出
   size_t i;
   for (i=0;i<SPAGE;i++) {
-    block_read (sblock,swap_index*SPAGE+i,page+BLOCK_SECTOR_SIZE*i);
+    block_read (sblock,swap_idx*SPAGE+i,page+BLOCK_SECTOR_SIZE*i);
   }
 
-  bitmap_set(sbitmap, swap_index, true);
+  bitmap_set(sbitmap, swap_idx, true);
+}
+
+/*检查交换区域*/
+void vm_swap_free (uint32_t swap_idx)
+{
+  //检查交换区域
+  ASSERT (swap_idx < ssize);
+  if (bitmap_test(sbitmap, swap_idx) == true) {
+    PANIC ("Error, invalid free request to unassigned swap block");
+  }
+  bitmap_set(sbitmap, swap_idx, true);
 }

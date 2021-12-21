@@ -244,11 +244,20 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+  /*mmap描述符*/
+  struct list *mmlist = &cur->mmap_list;
+  while (!list_empty(mmlist)) {
+    struct list_elem *e = list_begin (mmlist);
+    struct mmap_desc *m = list_entry(e, struct mmap_desc, elem);
+
+    // in sys_munmap(), the element is removed from the list
+    ASSERT( sys_munmap (m->id) == true );
+  }
   //p3进程退出时释放spt
-  free(cur->spt);
-  cur->spt=NULL;
-  /* Destroy the current process's page directory and switch back
-     to the kernel-only page directory. */
+/*销毁supt、其所有spte、所有页框和交换。其线程结束将导致故障。*/
+  vm_spt_destroy (cur->spt);
+  cur->spt = NULL;
+
   pd = cur->pagedir;
   if (pd != NULL)
   {
@@ -556,32 +565,45 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
       /* Get a page of memory. */
       // uint8_t *kpage = palloc_get_page (PAL_USER);
-      uint8_t *kpage = vm_get_frame (PAL_USER,upage);
-      if (kpage == NULL)
+// #ifdef VM
+      // 懒加载
+      struct thread *cur = thread_current ();
+      ASSERT (pagedir_get_page(cur->pagedir, upage) == NULL);
+
+      if (! vm_spt_filesys_install(cur->spt, upage,file, ofs, page_read_bytes, page_zero_bytes, writable) ) {
         return false;
+      }
+// #else
+      // uint8_t *kpage = vm_get_frame (PAL_USER,upage);
+      // if (kpage == NULL)
+      //   return false;
 
-      /* Load this page. */
-      if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
-        {
-          // palloc_free_page (kpage);
-          vm_free_frame(kpage);
-          return false; 
-        }
-      memset (kpage + page_read_bytes, 0, page_zero_bytes);
+      // /* Load this page. */
+      // if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
+      //   {
+      //     // palloc_free_page (kpage);
+      //     vm_free_frame(kpage);
+      //     return false; 
+      //   }
+      // memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
-      /* Add the page to the process's address space. */
-      if (!install_page (upage, kpage, writable)) 
-        {
-          // palloc_free_page (kpage);
-          vm_free_frame(kpage);
-          return false; 
-        }
-
+      // /* Add the page to the process's address space. */
+      // if (!install_page (upage, kpage, writable)) 
+      //   {
+      //     // palloc_free_page (kpage);
+      //     vm_free_frame(kpage);
+      //     return false; 
+      //   }
+// #endif
       /* Advance. */
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
+// #ifdef VM
+      ofs += PGSIZE;
+// #endif
     }
+
   return true;
 }
 
@@ -633,9 +655,12 @@ install_page (void *upage, void *kpage, bool writable)
   /* Verify that there's not already a page at that virtual
      address, then map our page there. 确认在该虚拟地址上还没有一个页面。
      地址，然后将我们的页面映射到那里。*/
-  return (pagedir_get_page (t->pagedir, upage) == NULL
+  bool mark=(pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable)
-          && vm_spt_set_page(t->spt,upage)
-          );
+          && vm_spt_frame_install(t->spt,upage,kpage));
+  if(mark){
+    vm_frame_unpin(kpage);
+  }
+  return mark;
 
 }

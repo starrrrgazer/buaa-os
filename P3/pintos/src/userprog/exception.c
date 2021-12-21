@@ -182,7 +182,7 @@ page_fault (struct intr_frame *f)
    bool onstack,isaddr;
    if(esp <= fault_addr || fault_addr == f->esp - 4 || fault_addr == f->esp - 32){
       if(fault_addr<PHYS_BASE && PHYS_BASE-MAXSIZE<=fault_addr){
-         if(vm_supt_has_entry(curr->spt,fault_page)==false){
+         if(vm_spt_has_entry(curr->spt,fault_page)==false){
             vm_spt_zeropage (curr->spt, fault_page);
          }
       }

@@ -15,6 +15,8 @@
 #include <devices/input.h>
 #include <threads/malloc.h>
 #include <threads/palloc.h>
+#include "vm/page.h"
+
 static void syscall_handler (struct intr_frame *);
 typedef void (*CALL_PROC)(struct intr_frame*);
 CALL_PROC syscalls[21];
@@ -31,8 +33,31 @@ void read(struct intr_frame* f);
 void seek(struct intr_frame* f); 
 void tell(struct intr_frame* f); 
 void close(struct intr_frame* f); 
+void mmap(struct intr_frame* f); 
+void munmap(struct intr_frame* f); 
 
+/*msy update*/
+mmapid_t sys_mmap(int fd, void *);
+bool sys_munmap(mmapid_t fd);
+void pre_pages(const void *, size_t);
+void unpin_pre_pages(const void *, size_t);
 
+static struct mmap_desc* find_mmap_desc(struct thread *t, mmapid_t mmapid)
+{
+  ASSERT (t!= NULL);
+  struct list_elem *e;
+  if (!list_empty(&t->mmap_list)) {
+    for(e = list_begin(&t->mmap_list);e != list_end(&t->mmap_list); e = list_next(e))
+    {
+      struct mmap_desc *d = list_entry(e, struct mmap_desc, elem);
+      if(d->id == mmapid) {
+        return d;
+      }
+    }
+  }
+
+  return NULL;
+}
 struct threadfile * fileid(int id)   //依据文件句柄从进程打开文件表中找到文件指针
 { 
   struct list_elem *e; 
@@ -67,6 +92,8 @@ syscall_init (void)
   syscalls[SYS_CLOSE] =&close;
   syscalls[SYS_READ] = &read;
   syscalls[SYS_FILESIZE] = &filesize;
+  syscalls[SYS_MMAP] = &sys_mmap;
+  syscalls[SYS_MUNMAP] = &sys_munmap;
 
 }
 
@@ -103,6 +130,7 @@ void * checkPtr(const void *user_ptr){
  int
 get_user (const uint8_t *uaddr)
 {
+  
   int result;
   asm ("movl $1f, %0; movzbl %1, %0; 1:" : "=&a" (result) : "m" (*uaddr));
   return result;
@@ -119,6 +147,26 @@ put_user (uint8_t *udst, uint8_t byte)
        : "=&a" (error_code), "=m" (*udst) : "q" (byte));
   return error_code != -1;
 }
+/*msy 使用起始地址src，并写入dst，返回读取的字节数。
+  如果内存访问无效，将调用exit（），从而
+  进程以返回代码-1终止。*/
+static int memread_user (void *src, void *dst, size_t bytes)
+{
+  int32_t value;
+  size_t i;
+  for(i=0; i<bytes; i++) {
+    
+    value = get_user(src + i);
+    if(value == -1) 
+      if (lock_held_by_current_thread(&filelock))
+        lock_release (&filelock);
+      thread_current()->exitStatus = -1;
+      thread_exit();
+    *(char*)(dst + i) = value & 0xff;
+  }
+  return (int)bytes;
+}
+
 //这些函数中的每一个都假定用户地址已经被验证为如下PHYS_BASE。他们还假设您已经进行了修改，page_fault()以便内核中的页面错误仅设置eax为0xffffffff并将其以前的值复制到eip.
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
@@ -164,8 +212,9 @@ void write(struct intr_frame *f)
     if(tf)
     {
       lock_acquire(&filelock);
-      
+      pre_pages(buf, size);
       f->eax=file_write(tf->file,buf,size);
+      unpin_pre_pages(buf, size);
       lock_release(&filelock);
     }
     else{
@@ -306,7 +355,9 @@ read(struct intr_frame *f)
     if (file!=NULL)
     {
       lock_acquire(&filelock);
+      pre_pages(buffer, size);
       f->eax = file_read (file->file, buffer, size);
+      unpin_pre_pages(buffer, size);
       lock_release(&filelock);
     } 
     else
@@ -384,5 +435,138 @@ void close(struct intr_frame *f) {
     free(file);
   }
 }
+/*msy 系统调用mmap*/
+void mmap(struct intr_frame *f){
+  int fd;
+  void *addr;
+  memread_user(f->esp+4, &fd, sizeof(fd));
+  memread_user(f->esp+8, &addr, sizeof(addr));
+  mmapid_t ret = sys_mmap(fd, addr);
+  f->eax=ret;
+}
 
 
+/*msy p3 mmap*/
+mmapid_t sys_mmap(int fd, void *virtual_page) {
+  // check arguments
+  if (pg_ofs(virtual_page) != 0||virtual_page == NULL) return -1;
+  if (fd <= 1) return -1; 
+  struct thread *cur = thread_current();
+
+  lock_acquire (&filelock);
+
+  /*打开文件*/
+  struct file *f = NULL;
+  struct threadfile *file = fileid(fd);
+  if(file && file->file) {
+  /*重新打开文件，使其不会干扰进程本身,将q其存储在mmap_list中（稍后在munmap上关闭）*/
+    f = file_reopen (file->file);
+  }
+  if(f == NULL){
+    lock_release (&filelock);
+    return -1;
+  }
+
+  size_t size = file_length(f);
+  if(size==0) {
+    lock_release (&filelock);
+    return -1;
+  }
+
+  /* 映射内存页:首先确保所有页面地址都不存在*/
+  size_t offset;
+  for (offset = 0; offset < size; offset += PGSIZE) {
+    void *addr = virtual_page + offset;
+    if (vm_spt_has_entry(cur->spt, addr)){
+      lock_release (&filelock);
+      return -1;
+    }
+  }
+
+  /* 将每个页面映射到文件系统*/
+  for (offset = 0; offset <size; offset += PGSIZE) {
+    void *addr = virtual_page + offset;
+
+    size_t read_bytes = (offset + PGSIZE < size ? PGSIZE : size - offset);
+    size_t zero_bytes = PGSIZE - read_bytes;
+
+    vm_spt_filesys_install(cur->spt, addr,f, offset, read_bytes, zero_bytes, true);
+  }
+
+  /* 分配mmapid */
+  mmapid_t mmapid;
+  if (!list_empty(&cur->mmap_list)) {
+    mmapid = list_entry(list_back(&cur->mmap_list), struct mmap_desc, elem)->id + 1;
+  }
+  else mmapid = 1;
+
+  struct mmap_desc *p = (struct mmap_desc*) malloc(sizeof(struct mmap_desc));
+  p->id = mmapid;
+  p->file = f;
+  p->addr = virtual_page;
+  p->size = size;
+  list_push_back (&cur->mmap_list, &p->elem);
+
+  // 释放并返回mmid
+  lock_release (&filelock);
+  return mmapid;
+}
+
+
+/*msy 系统调用munmap*/
+void munmap(struct intr_frame *f){
+  mmapid_t mmapid;
+  memread_user(f->esp + 4, &mmapid, sizeof(mmapid));
+  sys_munmap(mmapid);
+}
+/*msy p3 munmap*/
+bool sys_munmap(mmapid_t mmapid)
+{
+  struct thread *cur = thread_current();
+  struct mmap_desc *mmap_d = find_mmap_desc(cur, mmapid);
+
+  if(mmap_d == NULL) { //未找到mmapid
+    return false; 
+  }
+
+  lock_acquire (&filelock);
+  {
+    // 反复浏览每一页
+    size_t offset, size = mmap_d->size;
+    for(offset = 0; offset < size; offset += PGSIZE) {
+      void *addr = mmap_d->addr + offset;
+      size_t bytes = (offset + PGSIZE < size ? PGSIZE : size - offset);
+      vm_spt_unmap (cur->spt, cur->pagedir, addr, mmap_d->file, offset, bytes);
+    }
+
+    // 释放资源，并从列表中移除
+    list_remove(& mmap_d->elem);
+    file_close(mmap_d->file);
+    free(mmap_d);
+  }
+  lock_release (&filelock);
+
+  return true;
+}
+
+void unpin_pre_pages(const void *buffer, size_t size)
+{
+  struct supplemental_page_table *spt = thread_current()->spt;
+  void *virtual_page;
+  for(virtual_page = pg_round_down(buffer); virtual_page < buffer + size; virtual_page += PGSIZE)
+  {
+    vm_unpin_page (spt, virtual_page);
+  }
+}
+
+void pre_pages(const void *buffer, size_t size)
+{
+  struct supplemental_page_table *spt = thread_current()->spt;
+  uint32_t *pagedir = thread_current()->pagedir;
+  void *virtual_page;
+  for(virtual_page = pg_round_down(buffer); virtual_page < buffer + size; virtual_page += PGSIZE)
+  {
+    vm_load_page (spt, pagedir, virtual_page);
+    vm_pin_page (spt, virtual_page);
+  }
+}

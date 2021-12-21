@@ -10,6 +10,7 @@
 #include "threads/synch.h"
 #include "threads/malloc.h"
 #include "threads/palloc.h"
+#include "filesys/off_t.h"
 
 /* 根据官方文档，用一个hash表来分配物理页，其中的hash是定义在lib/kernel/hash.c */
 /*下面是hash的结构
@@ -59,15 +60,27 @@ struct supplemental_page_table_entry{
   struct thread *thread;
   /*page对应的状态*/
   enum page_status status;
+  bool dirty; //脏位
   uint32_t swap_index;
+  struct file *file;
+  off_t file_offset;
+  uint32_t read_bytes;
+  uint32_t zero_bytes;
+  bool writable;
 };
 
 struct supplemental_page_table* vm_create_spt ();
-bool vm_spt_set_page (struct supplemental_page_table *spt, void *virtual_page);
-bool vm_spt_zeropage (struct supplemental_page_table *spt, void *virtual_page);
+bool vm_spt_frame_install (struct supplemental_page_table *spt, void *virtual_page, void *physical_page);
 bool vm_load_page(struct supplemental_page_table *spt, int *pagedir, void *virtual_page);
 bool vm_supt_set_swap (struct supplemental_page_table *supt, void *, uint32_t);
-bool vm_supt_has_entry (struct supplemental_page_table *, void *page);
+bool vm_spt_has_entry (struct supplemental_page_table *, void *page);
+bool vm_spt_filesys_install (struct supplemental_page_table *spt, void *upage,struct file * file, 
+                        off_t offset, uint32_t read_bytes, uint32_t zero_bytes, bool writable);
 struct supplemental_page_table_entry* vm_spt_lookup (struct supplemental_page_table *supt, void *);
+bool vm_spt_unmap(struct supplemental_page_table *spt,uint32_t *pagedir,void *page, struct file *file, off_t offset, size_t bytes);
+void vm_pin_page(struct supplemental_page_table *spt, void *page);
+void vm_unpin_page(struct supplemental_page_table *spt, void *page);
+bool vm_spt_set_dirty (struct supplemental_page_table *spt, void *, bool);
+
 
 #endif //BUAA_OS_PAGE_H
