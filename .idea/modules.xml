@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/buaa-os.iml" filepath="$PROJECT_DIR$/.idea/buaa-os.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/buaa-os2.iml" filepath="$PROJECT_DIR$/.idea/buaa-os2.iml" />
     </modules>
   </component>
 </project>

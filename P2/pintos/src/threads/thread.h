@@ -4,7 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-
+#include <threads/synch.h>
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -93,7 +93,12 @@ struct child
    bool waited; //进程是否被等待过
    int exitStatus;//进程退出时的状态
 };
-
+//!
+struct threadfile{
+   int fd;
+   struct file* file;
+   struct list_elem fileelem;
+};
 
 struct thread
   {
@@ -105,7 +110,10 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
-    int vreturn;
+    //!
+    struct list files; 
+    int nfd;
+    struct file * nowfile;
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
@@ -123,7 +131,7 @@ struct thread
 
     /*wll update*/
     struct semaphore sema;
-    struct list childs; //! 或许不需要
+    struct list childs; 
     struct child* childThread;   //作为子进程该有的属性
     struct thread* parent;
     bool childSuccess;  //判断子进程是否成功运行

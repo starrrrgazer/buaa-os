@@ -10,25 +10,44 @@
 #include "devices/shutdown.h"
 #include "process.h"
 #include "threads/synch.h"
+#include "pagedir.h"
+#include <threads/vaddr.h>
+#include <devices/input.h>
+#include <threads/malloc.h>
+#include <threads/palloc.h>
 static void syscall_handler (struct intr_frame *);
 typedef void (*CALL_PROC)(struct intr_frame*);
-static struct lock filelock ;
 CALL_PROC syscalls[21];
-void write(struct intr_frame* f); /* syscall write */
-void halt(struct intr_frame* f); /* syscall halt. */
-void exit(struct intr_frame* f); /* syscall exit. */
-void exec(struct intr_frame* f); /* syscall exec. */
+void write(struct intr_frame* f); 
+void halt(struct intr_frame* f); 
+void exit(struct intr_frame* f); 
+void exec(struct intr_frame* f);
+void create(struct intr_frame* f);
+void remove(struct intr_frame* f);
+void open(struct intr_frame* f);
+void wait(struct intr_frame* f);
+void filesize(struct intr_frame* f);
+void read(struct intr_frame* f);  
+void seek(struct intr_frame* f); 
+void tell(struct intr_frame* f); 
+void close(struct intr_frame* f); 
 
-/* Our implementation for Task3: syscall create, remove, open, filesize, read, write, seek, tell, and close */
-void create(struct intr_frame* f); /* syscall create */
-void remove(struct intr_frame* f); /* syscall remove */
-void open(struct intr_frame* f);/* syscall open */
-void wait(struct intr_frame* f); /*syscall wait */
-void filesize(struct intr_frame* f);/* syscall filesize */
-void read(struct intr_frame* f);  /* syscall read */
-void seek(struct intr_frame* f); /* syscall seek */
-void tell(struct intr_frame* f); /* syscall tell */
-void close(struct intr_frame* f); /* syscall close */
+
+struct threadfile * fileid(int id)   //依据文件句柄从进程打开文件表中找到文件指针
+{ 
+  struct list_elem *e; 
+  struct threadfile * temp=NULL;
+  struct list *files=&thread_current()->files;
+  
+  for(e=list_begin(files);e!=list_end(files);e=list_next(e)) 
+  { 
+    temp= list_entry (e, struct threadfile, fileelem); 
+    if(id==temp->fd) return temp; 
+
+  } 
+  return NULL; 
+
+}
 
 
 struct thread_file * find_file_id(int id)   //依据文件句柄从进程打开文件表中找到文件指针
@@ -57,8 +76,6 @@ syscall_init (void)
   syscalls[SYS_EXEC] = &exec;
   syscalls[SYS_HALT] = &halt;
   syscalls[SYS_EXIT] = &exit;
- 
-  // /* Our implementation for Task3: initialize create, remove, open, filesize, read, write, seek, tell, and close */
   syscalls[SYS_WAIT] = &wait;
   syscalls[SYS_CREATE] = &create;
   syscalls[SYS_REMOVE] = &remove;
@@ -68,23 +85,6 @@ syscall_init (void)
   syscalls[SYS_CLOSE] =&close;
   syscalls[SYS_READ] = &read;
   syscalls[SYS_FILESIZE] = &filesize;
-
-}
-
-static void
-syscall_handler (struct intr_frame *f UNUSED) 
-{
-  printf ("system call!\n");
-  int *p=f->esp;
-  int type = * (int *)f->esp;//检验系统调用号sys_code是否合法
-  if(type <= 0 || type >= 21){
-    printf ("system error!\n");
-    /*wll update. 对于错误，返回应该是-1*/
-    thread_current()->exitStatus = -1;
-    thread_exit ();
-  }
-  syscalls[type](f);
-
 }
 
 
@@ -96,7 +96,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 * */
 void * checkPtr(const void *user_ptr){
   //是否指向了没有权限的位置
-  if(!is_user_vaddr(user_ptr)){ 
+  if(!is_user_vaddr(user_ptr) || user_ptr == NULL || user_ptr < (const void *)0x08048000){ 
     thread_current()->exitStatus = -1;
     thread_exit();
   }
@@ -109,25 +109,26 @@ void * checkPtr(const void *user_ptr){
     }
   }
 }
+
+
 /*下面是官方文档里给出的帮助代码*/
 
 /* 在用户虚拟地址 UADDR 读取一个字节。
    UADDR 必须低于 PHYS_BASE。
    如果成功则返回字节值，如果出现段错误则返回 -1
    发生了。*/
-static int
+ int
 get_user (const uint8_t *uaddr)
 {
   int result;
-  asm ("movl $1f, %0; movzbl %1, %0; 1:"
-       : "=&a" (result) : "m" (*uaddr));
+  asm ("movl $1f, %0; movzbl %1, %0; 1:" : "=&a" (result) : "m" (*uaddr));
   return result;
 }
  
 /* 将 BYTE 写入用户地址 UDST。
    UDST 必须低于 PHYS_BASE。
    如果成功则返回真，如果发生段错误则返回假。*/
-static bool
+ bool
 put_user (uint8_t *udst, uint8_t byte)
 {
   int error_code;
@@ -136,60 +137,97 @@ put_user (uint8_t *udst, uint8_t byte)
   return error_code != -1;
 }
 //这些函数中的每一个都假定用户地址已经被验证为如下PHYS_BASE。他们还假设您已经进行了修改，page_fault()以便内核中的页面错误仅设置eax为0xffffffff并将其以前的值复制到eip.
-
-
-
-void 
-write (struct intr_frame* f)
+static void
+syscall_handler (struct intr_frame *f UNUSED) 
 {
-  uint32_t *user_ptr = f->esp;
+  //printf ("system call!\n");
+  int *p=f->esp;
+  checkPtr(p+1);
+  int type = * (int *)f->esp;//检验系统调用号sys_code是否合法
+  if(type <= 0 || type >= 21){
+    //printf ("system error!\n");
+    /*wll update. 对于错误，返回应该是-1*/
+    thread_current()->exitStatus = -1;
+    thread_exit ();
+  }
+  syscalls[type](f);
 
+}
+
+
+void write(struct intr_frame *f)
+{
+  int *user_ptr = (int *)f->esp;
+  checkPtr(*(user_ptr+6));
+  checkPtr(user_ptr+7);
+  checkPtr((user_ptr + 3));
+  // for(int i=0;i<=7;i++){
+  //   printf("（3）%#X %#X\n",user_ptr+i,(int *)*(user_ptr+i));
+  // }
   *user_ptr++;
   int fd = *user_ptr;
-  const char * buffer = (const char *)*(user_ptr+1);
-  off_t size = *(user_ptr+2);
-  if (fd == 1) {//writes to the console
+  const char *buf = (const char *)*(user_ptr + 1);
+  off_t size = *(user_ptr + 2);
+  if (fd == 1)
+  { //writes to the console
     //putbuf("gao",3);
-    putbuf(buffer,size);
-    f->eax = size;//return number written
+    putbuf(buf, size);
+    f->eax = size; //return number written
   }
-  
+  else{
+    struct threadfile *tf=fileid(*user_ptr);
+    if(tf)
+    {
+      lock_acquire(&filelock);
+      
+      f->eax=file_write(tf->file,buf,size);
+      lock_release(&filelock);
+    }
+    else{
+      f->eax=0;
+    }
+  }
 }
+
+
 void halt(struct intr_frame* f){
     shutdown_power_off();
 }
 /*wll update.这里需要记录进程退出的状态。*/
 void exit(struct intr_frame* f){
-    uint32_t *user_ptr = f->esp;
-    check_ptr2 (user_ptr + 1);
+    int *user_ptr = (int *)f->esp;
+    checkPtr (user_ptr + 3);
     *user_ptr++;
     thread_current()->exitStatus = *user_ptr;
     thread_exit ();
 }
-
-pid_t exec(const char * file){
-    if(!file)
-    {
-        return -1;
-    }
+void exec(struct intr_frame* f){
+    int *user_ptr = (int *)f->esp;
+    checkPtr (user_ptr + 3);
+    checkPtr (*(user_ptr + 3));
+  //   for(int i=0;i<=3;i++){
+  //   printf("（1）%#X %#X\n",user_ptr+i,(int *)*(user_ptr+i));
+  // }
+    *user_ptr++;
+    //!
     lock_acquire(&filelock);
-    pid_t tid = process_execute(file);
+    f->eax = process_execute((const char*)* user_ptr);
+    //!
     lock_release(&filelock);
-    return tid;
 }
 
 /*
  * wll update wait,create,remove
- * uint32_t *user_ptr = f->esp; -----esp此时指向栈顶
- * user_ptr++;--------指针指向第一个参数，再加一就是第二个参数
+ * int *user_ptr = (int *)f->esp; -----esp此时指向栈顶
+ * user_ptr++;--------指针指向第一个参数
  * 是否还需要判断指针的合法性？
  * */
 /*
 * 需要调用P2\pintos\src\userprog\process.c的process_wait (tid_t child_tid UNUSED) 
 * */
 void wait(struct intr_frame* f){
-  uint32_t *user_ptr = f->esp;
-  checkPtr(user_ptr + 1 );
+  int *user_ptr = (int *)f->esp;
+  checkPtr(user_ptr + 3 );
   user_ptr ++;
   f->eax = process_wait(*user_ptr);
 }
@@ -198,9 +236,14 @@ void wait(struct intr_frame* f){
  * filesys_create (const char *name, off_t initial_size)函数，直接调用
  * */
 void create(struct intr_frame* f){
-    uint32_t *user_ptr = f->esp; 
-    checkPtr(user_ptr + 1);
-    checkPtr(user_ptr + 2);
+    int *user_ptr = (int *)f->esp; 
+    //!
+    checkPtr (user_ptr + 5);
+    checkPtr (*(user_ptr + 4));
+  //   for(int i=0;i<=5;i++){
+  //   printf("（2）%#X %#X\n",user_ptr+i,(int *)*(user_ptr+i));
+  // }
+  
     user_ptr++;
     lock_acquire(&filelock);
     f->eax = filesys_create((const char*)*user_ptr,*(user_ptr+1));
@@ -211,9 +254,10 @@ void create(struct intr_frame* f){
  * filesys_remove (const char *name) 函数，直接调用
  * */
 void remove(struct intr_frame* f){
-  uint32_t *user_ptr = f->esp;
-  checkPtr(user_ptr + 1);
-  checkPtr(*(user_ptr + 1));
+  int *user_ptr = (int *)f->esp;
+  checkPtr(user_ptr + 3);
+  checkPtr(*(user_ptr + 3));
+  
   user_ptr++;
   lock_acquire(&filelock);
   f->eax = filesys_remove((const char*)*user_ptr);
@@ -223,57 +267,49 @@ void remove(struct intr_frame* f){
 void 
 open (struct intr_frame* f)
 {
-  uint32_t *user_ptr = f->esp;
-  check_ptr (user_ptr + 1);
-  check_ptr (*(user_ptr + 1));
+  int *user_ptr = (int *)f->esp;
+  checkPtr (user_ptr + 3);
+  checkPtr (*(user_ptr + 3));
+  
   *user_ptr++;
   lock_acquire(&filelock);
-  struct file * file_opened = filesys_open((const char *)*user_ptr);
+  struct file * opfile= filesys_open((const char *)*user_ptr);
   lock_release(&filelock);
   struct thread *cur=thread_current(); 
-  if (file_opened)
+  if (opfile!=NULL)
   {
-    struct threadfile *temp = malloc(sizeof(struct thread_file));
-    temp->fd = cur->max_file_fd++;
-    temp->file = file_opened;
-    list_push_back (&cur->files, &temp->file_elem);//维护files列表
-    f->eax = temp->fd;
+    struct threadfile *file = malloc(sizeof(struct threadfile));
+    file->fd = cur->nfd++;
+    file->file =  opfile;
+    list_push_back (&cur->files, &file->fileelem);//维护files列表
+    f->eax = file->fd;
   } 
-  else// the file could not be opened
+  else
   {
     f->eax = -1;
   }
 
 }
 
-bool 
-is_valid_pointer (void* esp,uint8_t argc){
-  for (uint8_t i = 0; i < argc; ++i)
-  {
-    if((!is_user_vaddr (esp)) || 
-      (pagedir_get_page (thread_current()->pagedir, esp)==NULL)){
-      return false;
-    }
-  }
-  return true;
-}
-
 void 
 read(struct intr_frame *f) 
 { 
 
-  uint32_t *user_ptr = f->esp;
-  /* PASS the test bad read */
+  int *user_ptr = (int *)f->esp;
+  //!
+  
   *user_ptr++;
-  /* We don't konw how to fix the bug, just check the pointer */
   int fd = *user_ptr;
   uint8_t * buffer = (uint8_t*)*(user_ptr+1);
   off_t size = *(user_ptr+2);
-  if (!is_valid_pointer (buffer, 1) || !is_valid_pointer (buffer + size,1)){
-    exit_special ();
-  }
-  /* get the files buffer */
-  if (fd == 0) //stdin
+  //!
+  if(!is_user_vaddr (buffer) || !is_user_vaddr (buffer + size)||
+    pagedir_get_page (thread_current()->pagedir, buffer)==NULL|| 
+    pagedir_get_page (thread_current()->pagedir,buffer + size)==NULL){
+      thread_current()->exitStatus = -1;
+      thread_exit();
+    }
+  if (fd == 0) 
   {
     for (int i = 0; i < size; i++)
       buffer[i] = input_getc();
@@ -281,36 +317,33 @@ read(struct intr_frame *f)
   }
   else
   {
-    struct threadfile * temp = find_file_id (*user_ptr);
-    if (temp)
+    struct threadfile * file =fileid (*user_ptr);
+    if (file!=NULL)
     {
       lock_acquire(&filelock);
-      f->eax = file_read (temp->file, buffer, size);
+      f->eax = file_read (file->file, buffer, size);
       lock_release(&filelock);
     } 
-    else//can't read
+    else
     {
       f->eax = -1;
     }
   }
 
 } 
-
-
-
-
 void 
 filesize(struct intr_frame *f) 
 {  
 
-  uint32_t *user_ptr = f->esp;
-  check_ptr (user_ptr + 1);
-  *user_ptr++;//fd
-  struct threadfile *temp = find_file_id (*user_ptr);
-  if (temp)
+  int *user_ptr = (int *)f->esp;
+  checkPtr (user_ptr + 3);
+  
+  *user_ptr++;
+  struct threadfile *file =fileid (*user_ptr);
+  if (file!=NULL)
   {
     lock_acquire(&filelock);
-    f->eax = file_length (temp->file);//return the size in bytes
+    f->eax = file_length (file->file);
     lock_release(&filelock);
   } 
   else
@@ -320,8 +353,51 @@ filesize(struct intr_frame *f)
 
 }
 
+void seek(struct intr_frame *f)
+{
+  int *user_ptr = (int *)f->esp;
+  checkPtr(user_ptr + 5);
+  
+  *user_ptr++;
+  struct threadfile *file = fileid(*user_ptr);
+  if (file != NULL)
+  {
+    lock_acquire(&filelock);
+    file_seek(file->file, *(user_ptr + 1));
+    lock_release(&filelock);
+  }
+}
+void tell(struct intr_frame *f)
+{
+  int *user_ptr = (int *)f->esp;
+  checkPtr(user_ptr + 3);
+  
+  *user_ptr++;
+  struct threadfile *file = fileid(*user_ptr);
+  if (file != NULL)
+  {
+    lock_acquire(&filelock);
+    f->eax = file_tell(file->file);
+    lock_release(&filelock);
+  }
+  else
+  {
+    f->eax = -1;
+  }
+}
+void close(struct intr_frame *f) { 
+  int *user_ptr = (int *)f->esp; 
+  checkPtr(user_ptr + 3);
+  
+  *user_ptr++;
+  struct threadfile *file = fileid(*user_ptr);
+  if(file!=NULL){
+    lock_acquire(&filelock);
+    file_close(file->file);
+    lock_release(&filelock);
+    list_remove(&file->fileelem);
+    free(file);
+  }
+}
 
-void seek(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
-void tell(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
-void close(struct intr_frame* f){uint32_t *user_ptr = f->esp;}
 
