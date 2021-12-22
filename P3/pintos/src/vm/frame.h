@@ -11,8 +11,6 @@
 #include "threads/palloc.h"
 #include "threads/vaddr.h"
 
-/**/
-struct list frame_table;
 
 
 
