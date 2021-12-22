@@ -126,79 +126,79 @@ kill (struct intr_frame *f)
    description of "Interrupt 14--Page Fault Exception (#PF)" in
    [IA32-v3a] section 5.15 "Exception and Interrupt Reference". */
 static void
-page_fault (struct intr_frame *f) 
+page_fault (struct intr_frame *f)
 {
-  bool not_present;  /* True: not-present page, false: writing r/o page. */
-  bool write;        /* True: access was write, false: access was read. */
-  bool user;         /* True: access by user, false: access by kernel. */
-  void *fault_addr;  /* Fault address. */
+    bool not_present;  /* True: not-present page, false: writing r/o page. */
+    bool write;        /* True: access was write, false: access was read. */
+    bool user;         /* True: access by user, false: access by kernel. */
+    void *fault_addr;  /* Fault address. */
 
-  /* Obtain faulting address, the virtual address that was
-     accessed to cause the fault.  It may point to code or to
-     data.  It is not necessarily the address of the instruction
-     that caused the fault (that's f->eip).
-     See [IA32-v2a] "MOV--Move to/from Control Registers" and
-     [IA32-v3a] 5.15 "Interrupt 14--Page Fault Exception
-     (#PF)". */
-  asm ("movl %%cr2, %0" : "=r" (fault_addr));
+    /* Obtain faulting address, the virtual address that was
+       accessed to cause the fault.  It may point to code or to
+       data.  It is not necessarily the address of the instruction
+       that caused the fault (that's f->eip).
+       See [IA32-v2a] "MOV--Move to/from Control Registers" and
+       [IA32-v3a] 5.15 "Interrupt 14--Page Fault Exception
+       (#PF)". */
+    asm ("movl %%cr2, %0" : "=r" (fault_addr));
 
-  /* Turn interrupts back on (they were only off so that we could
-     be assured of reading CR2 before it changed). */
-  intr_enable ();
+    /* Turn interrupts back on (they were only off so that we could
+       be assured of reading CR2 before it changed). */
+    intr_enable ();
 
-  /* Count page faults. */
-  page_fault_cnt++;
+    /* Count page faults. */
+    page_fault_cnt++;
 
-  /* Determine cause. */
-  not_present = (f->error_code & PF_P) == 0;
-  write = (f->error_code & PF_W) != 0;
-  user = (f->error_code & PF_U) != 0;
-  
+    /* Determine cause. */
+    not_present = (f->error_code & PF_P) == 0;
+    write = (f->error_code & PF_W) != 0;
+    user = (f->error_code & PF_U) != 0;
+
 //p3 update
-  //4.1.1补充页表表明用户进程不应该在它试图访问的地址处期待任何数据，
-   //4.1.2或者如果页面位于内核虚拟内存中，
-   //4.1.3或者如果访问是尝试写入只读页面，
-   //那么访问无效。任何无效访问都会终止进程，从而释放其所有资源。
-  if (fault_addr == NULL || !is_user_vaddr(fault_addr) || !not_present) {
-     f->eax=-1;
-     return;
-  }
-  /* 找到 void *fault_addr; 对应的页面*/
-  struct thread *curr = thread_current();
-  void* fault_page = (void*) pg_round_down(fault_addr);
+    //4.1.1补充页表表明用户进程不应该在它试图访问的地址处期待任何数据，
+    //4.1.2或者如果页面位于内核虚拟内存中，
+    //4.1.3或者如果访问是尝试写入只读页面，
+    //那么访问无效。任何无效访问都会终止进程，从而释放其所有资源。
+//   if (fault_addr == NULL || !is_user_vaddr(fault_addr) || !not_present) {
+//      f->eax=-1;
+//      return;
+//   }
+    /* 找到 void *fault_addr; 对应的页面*/
+    struct thread *curr = thread_current();
+    void* fault_page = (void*) pg_round_down(fault_addr);
 //!P3:
 //!gb:
-   if(!not_present){
-      //!gb:无法写入（写入处是只读地区
-      f->eax=-1;
-     return;
-   }
-   //!gb:获取用户程序栈指针的当前值。 
-   //!如果page错误内核产生我们不能从intr_frame获取
-   //!所以我们在系统调用开始时将当前esp存储到线程中。
-   void* esp = user ? f->esp : curr->cesp;
+    if(!not_present){
+        //!gb:无法写入（写入处是只读地区
+        goto PAGE_FAULT_VIOLATED_ACCESS;
+        return;
+    }
+    //!gb:获取用户程序栈指针的当前值。
+    //!如果page错误内核产生我们不能从intr_frame获取
+    //!所以我们在系统调用开始时将当前esp存储到线程中。
+    void* esp = user ? f->esp : curr->cesp;
 
 //!栈增长
-   bool onstack,isaddr;
-   if(esp <= fault_addr || fault_addr == f->esp - 4 || fault_addr == f->esp - 32){
-      if(fault_addr<PHYS_BASE && PHYS_BASE-MAXSIZE<=fault_addr){
-         if(vm_spt_has_entry(curr->spt,fault_page)==false){
-            vm_spt_zeropage (curr->spt, fault_page);
-         }
-      }
-   }
+    bool onstack,isaddr;
+    if(esp <= fault_addr || fault_addr == f->esp - 4 || fault_addr == f->esp - 32){
+        if(fault_addr<PHYS_BASE && PHYS_BASE-MAXSIZE<=fault_addr){
+            if(vm_spt_has_entry(curr->spt,fault_page)==false){
+                vm_spt_zeropage (curr->spt, fault_page);
+            }
+        }
+    }
 
-   //将数据载入内存
-  if(! vm_load_page(curr->spt, curr->pagedir, fault_page) ) {
-     f->eax=-1;
-     return;
-  }
+    //将数据载入内存
+    if(! vm_load_page(curr->spt, curr->pagedir, fault_page) ) {
+        goto PAGE_FAULT_VIOLATED_ACCESS;
+        return;
+    }
 
-  // success
-  return;
+    // success
+    return;
 
 
-
+    PAGE_FAULT_VIOLATED_ACCESS:
 /*wll update. 
 * They also assume that you've modified page_fault() so that a page fault in the kernel merely sets eax to 0xffffffff and copies its former value into eip.
 * bool user;         /* True: access by user, false: access by kernel. 

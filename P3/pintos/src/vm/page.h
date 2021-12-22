@@ -36,7 +36,7 @@ typedef bool hash_less_func (const struct hash_elem *a,
 */
 /*辅助页表*/
 struct supplemental_page_table {
-	struct hash pages;
+    struct hash pages;
 };
 /*
 根据官方文档， If the memory reference is valid, use the supplemental page table entry to locate the data that goes in the page, which might be in the file system, or in a swap slot, or it might simply be an all-zero page.
@@ -44,38 +44,38 @@ struct supplemental_page_table {
 */
 uint32_t swap_index;
 enum page_status {
-  ALL_ZERO,         
-  FRAME,         
-  SWAP,
-  FROM_FILESYS
+    ALL_ZERO,
+    FRAME,
+    SWAP,
+    FROM_FILESYS
 };
 struct supplemental_page_table_entry{
-  /*对应的物理地址,kpage*/
-  void *physical_address;       
-  /*hash表中的元素*/
-  struct hash_elem elem;     
-  /*对应的虚拟地址,upage*/
-  void *virtual_address;  
-  /*对应的进程*/      
-  struct thread *thread;
-  /*page对应的状态*/
-  enum page_status status;
-  bool dirty; //脏位
-  uint32_t swap_index;
-  struct file *file;
-  off_t file_offset;
-  uint32_t read_bytes;
-  uint32_t zero_bytes;
-  bool writable;
+    /*对应的物理地址,kpage*/
+    void *physical_address;
+    /*hash表中的元素*/
+    struct hash_elem elem;
+    /*对应的虚拟地址,upage*/
+    void *virtual_address;
+    /*对应的进程*/
+    struct thread *thread;
+    /*page对应的状态*/
+    enum page_status status;
+    bool dirty; //脏位
+    uint32_t swap_index;
+    struct file *file;
+    off_t file_offset;
+    uint32_t read_bytes;
+    uint32_t zero_bytes;
+    bool writable;
 };
 
 struct supplemental_page_table* vm_create_spt ();
 bool vm_spt_frame_install (struct supplemental_page_table *spt, void *virtual_page, void *physical_page);
-bool vm_load_page(struct supplemental_page_table *spt, int *pagedir, void *virtual_page);
+bool vm_load_page(struct supplemental_page_table *spt, uint32_t *pagedir, void *virtual_page);
 bool vm_supt_set_swap (struct supplemental_page_table *supt, void *, uint32_t);
 bool vm_spt_has_entry (struct supplemental_page_table *, void *page);
-bool vm_spt_filesys_install (struct supplemental_page_table *spt, void *upage,struct file * file, 
-                        off_t offset, uint32_t read_bytes, uint32_t zero_bytes, bool writable);
+bool vm_spt_filesys_install (struct supplemental_page_table *spt, void *upage,struct file * file,
+                             off_t offset, uint32_t read_bytes, uint32_t zero_bytes, bool writable);
 struct supplemental_page_table_entry* vm_spt_lookup (struct supplemental_page_table *supt, void *);
 bool vm_spt_unmap(struct supplemental_page_table *spt,uint32_t *pagedir,void *page, struct file *file, off_t offset, size_t bytes);
 void vm_pin_page(struct supplemental_page_table *spt, void *page);
