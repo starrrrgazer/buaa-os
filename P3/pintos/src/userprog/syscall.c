@@ -437,12 +437,16 @@ void close(struct intr_frame *f) {
 }
 /*msy 系统调用mmap*/
 void mmap(struct intr_frame *f){
-  int fd;
-  void *addr;
-  memread_user(f->esp+4, &fd, sizeof(fd));
-  memread_user(f->esp+8, &addr, sizeof(addr));
-  mmapid_t ret = sys_mmap(fd, addr);
-  f->eax=ret;
+    // int fd;
+    // void *addr;
+    // memread_user(f->esp+4, &fd, sizeof(fd));
+    // memread_user(f->esp+8, &addr, sizeof(addr));
+    int *user_ptr = (int *)f->esp;
+    checkPtr(user_ptr + 5);
+    *user_ptr++;
+    int fd = *user_ptr;
+    mmapid_t ret = sys_mmap(fd, user_ptr+1);
+    f->eax=ret;
 }
 
 
@@ -515,9 +519,12 @@ mmapid_t sys_mmap(int fd, void *virtual_page) {
 
 /*msy 系统调用munmap*/
 void munmap(struct intr_frame *f){
-  mmapid_t mmapid;
-  memread_user(f->esp + 4, &mmapid, sizeof(mmapid));
-  sys_munmap(mmapid);
+    int *user_ptr = (int *)f->esp;
+    checkPtr(user_ptr + 3);
+    *user_ptr++;
+    int mmapid = *user_ptr;
+    // memread_user(f->esp + 4, &mmapid, sizeof(mmapid));
+    sys_munmap(mmapid);
 }
 /*msy p3 munmap*/
 bool sys_munmap(mmapid_t mmapid)
