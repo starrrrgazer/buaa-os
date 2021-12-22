@@ -92,8 +92,8 @@ syscall_init (void)
   syscalls[SYS_CLOSE] =&close;
   syscalls[SYS_READ] = &read;
   syscalls[SYS_FILESIZE] = &filesize;
-  syscalls[SYS_MMAP] = &sys_mmap;
-  syscalls[SYS_MUNMAP] = &sys_munmap;
+  syscalls[SYS_MMAP] = &mmap;
+  syscalls[SYS_MUNMAP] = &munmap;
 
 }
 
